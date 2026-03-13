@@ -6,23 +6,26 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    /**
-     * Run the migrations.
-     */
     public function up(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            //
+
+            $table->foreignId('role_id')
+                  ->constrained('roles')
+                  ->restrictOnDelete();
+
+            $table->string('phone', 20)->nullable();
+
+            $table->softDeletes();
         });
     }
 
-    /**
-     * Reverse the migrations.
-     */
     public function down(): void
     {
         Schema::table('users', function (Blueprint $table) {
-            //
+            $table->dropConstrainedForeignId('role_id');
+            $table->dropColumn('phone');
+            $table->dropSoftDeletes();
         });
     }
 };
