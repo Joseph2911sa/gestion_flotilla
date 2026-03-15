@@ -97,9 +97,17 @@ class TripController extends Controller
 
     public function registerReturn(Request $request, Trip $trip): JsonResponse
     {
+        $endMileage = $request->input('end_mileage');
+
+        if ($endMileage <= $trip->start_mileage) {
+            return response()->json([
+                'message' => 'End mileage must be greater than start mileage.'
+            ], 422);
+        }
+
         $trip->update([
             'end_time' => $request->input('end_time', now()),
-            'end_mileage' => $request->input('end_mileage'),
+            'end_mileage' => $endMileage,
             'observations' => $request->input('observations')
         ]);
 
