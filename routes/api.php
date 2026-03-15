@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\MaintenanceController;
+use App\Http\Controllers\Api\ReportController;
 use App\Http\Controllers\Api\RouteController;
 use App\Http\Controllers\Api\TripController;
 use App\Http\Controllers\Api\TripRequestController;
@@ -17,6 +18,10 @@ Route::prefix('v1')->group(function () {
     Route::middleware('auth:sanctum')->group(function () {
 
         Route::post('logout', [AuthController::class, 'logout']);
+
+        // Reports
+        Route::get('reports/vehicle-availability', [ReportController::class, 'vehicleAvailability'])
+            ->middleware('role:Admin,Operador');
 
         // Users
         Route::apiResource('users', UserController::class)
