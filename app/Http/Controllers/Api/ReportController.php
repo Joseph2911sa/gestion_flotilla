@@ -53,4 +53,42 @@ class ReportController extends Controller
             'data' => $report
         ]);
     }
+
+    public function fleetUsage(Request $request): JsonResponse
+    {
+        $request->validate([
+            'start_date' => 'required|date',
+            'end_date' => 'required|date|after_or_equal:start_date',
+        ]);
+
+        $startDate = $request->query('start_date');
+        $endDate = $request->query('end_date');
+
+        $report = DB::table('trips')
+            ->join('vehicles', 'trips.vehicle_id', '=', 'vehicles.id')
+            ->whereNull('trips.deleted_at')
+            ->whereNull('vehicles.deleted_at')
+            ->whereBetween('trips.start_time', [$startDate, $endDate])
+            ->select(
+                'vehicles.id',
+                'vehicles.plate',
+                'vehicles.brand',
+                'vehicles.model',
+                DB::raw('COUNT(trips.id) as total_trips'),
+                DB::raw('COALESCE(SUM(trips.end_mileage - trips.start_mileage), 0) as total_kilometers')
+            )
+            ->groupBy(
+                'vehicles.id',
+                'vehicles.plate',
+                'vehicles.brand',
+                'vehicles.model'
+            )
+            ->orderBy('vehicles.id')
+            ->get();
+
+        return response()->json([
+            'message' => 'Reporte de uso de flotilla',
+            'data' => $report
+        ]);
+    }
 }
