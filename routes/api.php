@@ -26,6 +26,9 @@ Route::prefix('v1')->group(function () {
         Route::get('reports/fleet-usage', [ReportController::class, 'fleetUsage'])
             ->middleware('role:Admin,Operador');
 
+        Route::get('reports/driver-history', [ReportController::class, 'driverHistory'])
+            ->middleware('role:Admin,Operador');
+
         // Users
         Route::apiResource('users', UserController::class)
             ->middleware('role:Admin');

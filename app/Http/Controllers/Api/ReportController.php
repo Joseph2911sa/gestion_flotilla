@@ -91,4 +91,45 @@ class ReportController extends Controller
             'data' => $report
         ]);
     }
+
+    public function driverHistory(Request $request): JsonResponse
+    {
+        $request->validate([
+            'driver_id' => 'required|integer|exists:users,id',
+            'start_date' => 'required|date',
+            'end_date' => 'required|date|after_or_equal:start_date',
+        ]);
+
+        $driverId = $request->query('driver_id');
+        $startDate = $request->query('start_date');
+        $endDate = $request->query('end_date');
+
+        $report = DB::table('trip_requests')
+            ->join('vehicles', 'trip_requests.vehicle_id', '=', 'vehicles.id')
+            ->whereNull('trip_requests.deleted_at')
+            ->whereNull('vehicles.deleted_at')
+            ->where('trip_requests.user_id', $driverId)
+            ->where(function ($query) use ($startDate, $endDate) {
+                $query->whereBetween('trip_requests.departure_date', [$startDate, $endDate])
+                      ->orWhereBetween('trip_requests.return_date', [$startDate, $endDate]);
+            })
+            ->select(
+                'trip_requests.id',
+                'trip_requests.departure_date',
+                'trip_requests.return_date',
+                'trip_requests.status',
+                'trip_requests.reason',
+                'vehicles.plate',
+                'vehicles.brand',
+                'vehicles.model',
+                'vehicles.vehicle_type'
+            )
+            ->orderBy('trip_requests.departure_date')
+            ->get();
+
+        return response()->json([
+            'message' => 'Reporte de historial del chofer',
+            'data' => $report
+        ]);
+    }
 }
