@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\MaintenanceController;
 use App\Http\Controllers\Api\RouteController;
 use App\Http\Controllers\Api\TripController;
 use App\Http\Controllers\Api\TripRequestController;
+use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\VehicleController;
 use Illuminate\Support\Facades\Route;
 
@@ -16,6 +17,10 @@ Route::prefix('v1')->group(function () {
     Route::middleware('auth:sanctum')->group(function () {
 
         Route::post('logout', [AuthController::class, 'logout']);
+
+        // Users
+        Route::apiResource('users', UserController::class)
+            ->middleware('role:Admin');
 
         // Vehicles
         Route::apiResource('vehicles', VehicleController::class)
