@@ -7,6 +7,7 @@ use App\Http\Controllers\Api\RouteController;
 use App\Http\Controllers\Api\TripController;
 use App\Http\Controllers\Api\TripRequestController;
 use App\Http\Controllers\Api\UserController;
+use App\Http\Controllers\Api\VehicleAvailabilityController;
 use App\Http\Controllers\Api\VehicleController;
 use Illuminate\Support\Facades\Route;
 
@@ -34,7 +35,19 @@ Route::prefix('v1')->group(function () {
             ->middleware('role:Admin');
 
         // Vehicles
-        Route::apiResource('vehicles', VehicleController::class)
+        Route::get('vehicles', [VehicleController::class, 'index'])
+            ->middleware('role:Admin,Operador,Chofer');
+
+        Route::get('vehicles/{vehicle}', [VehicleController::class, 'show'])
+            ->middleware('role:Admin,Operador,Chofer');
+
+        Route::post('vehicles', [VehicleController::class, 'store'])
+            ->middleware('role:Admin,Operador');
+
+        Route::match(['put', 'patch'], 'vehicles/{vehicle}', [VehicleController::class, 'update'])
+            ->middleware('role:Admin,Operador');
+
+        Route::delete('vehicles/{vehicle}', [VehicleController::class, 'destroy'])
             ->middleware('role:Admin,Operador');
 
         // Fleet Routes
@@ -43,7 +56,7 @@ Route::prefix('v1')->group(function () {
 
         // Trip Requests
         Route::apiResource('trip-requests', TripRequestController::class)
-            ->middleware('role:Admin,Operador');
+            ->middleware('role:Admin,Operador,Chofer');
 
         Route::patch(
             'trip-requests/{tripRequest}/approve',
@@ -60,8 +73,22 @@ Route::prefix('v1')->group(function () {
         Route::patch(
             'trip-requests/{tripRequest}/cancel',
             [TripRequestController::class, 'cancel']
-        )->middleware('role:Admin,Operador')
+        )->middleware('role:Admin,Operador,Chofer')
          ->name('trip-requests.cancel');
+
+        // Tarjeta 24 — Función BD
+        Route::get(
+            'vehicles/{id}/availability',
+            [VehicleAvailabilityController::class, 'checkAvailability']
+        )->middleware('role:Admin,Operador,Chofer')
+         ->name('vehicles.availability');
+
+        // Tarjeta 23 — Procedimiento almacenado
+        Route::post(
+            'trip-requests/{id}/approve-db',
+            [VehicleAvailabilityController::class, 'approveViaDb']
+        )->middleware('role:Admin,Operador')
+         ->name('trip-requests.approve-db');
 
         // Trips
         Route::apiResource('trips', TripController::class)
