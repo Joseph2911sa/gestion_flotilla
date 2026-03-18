@@ -54,7 +54,21 @@ Route::prefix('v1')->group(function () {
         Route::apiResource('routes', RouteController::class)
             ->middleware('role:Admin,Operador');
 
-        // Trip Requests
+        // ── Trip Requests ─────────────────────────────────────────────────────
+
+        /*
+         * IMPORTANTE: La ruta de asignación directa debe declararse ANTES del
+         * apiResource para que Laravel no interprete 'direct-assign' como el
+         * parámetro {tripRequest} del resource route.
+         */
+
+        // Tarjeta 15 — Asignación directa (crea TripRequest en status = approved).
+        Route::post(
+            'trip-requests/direct-assign',
+            [TripRequestController::class, 'directAssign']
+        )->middleware('role:Admin,Operador')
+         ->name('trip-requests.direct-assign');
+
         Route::apiResource('trip-requests', TripRequestController::class)
             ->middleware('role:Admin,Operador,Chofer');
 
@@ -100,7 +114,8 @@ Route::prefix('v1')->group(function () {
         )->middleware('role:Chofer,Admin')
          ->name('trips.register-return');
 
-        // Maintenances
+        // ── Maintenances ──────────────────────────────────────────────────────
+
         Route::apiResource('maintenances', MaintenanceController::class)
             ->middleware('role:Admin,Operador');
 

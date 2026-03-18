@@ -3,12 +3,14 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\DirectAssignTripRequest;
 use App\Http\Requests\StoreTripRequestRequest;
 use App\Http\Requests\UpdateTripRequestRequest;
 use App\Models\TripRequest;
 use App\Models\Vehicle;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class TripRequestController extends Controller
 {
@@ -51,10 +53,8 @@ class TripRequestController extends Controller
         $query = TripRequest::with($this->listRelations)->latest();
 
         if ($user->isDriver()) {
-            // El chofer solo puede ver sus propias solicitudes.
             $query->where('user_id', $user->id);
         } else {
-            // Operador y Admin pueden filtrar por estado.
             if ($request->filled('status')) {
                 $query->where('status', $request->status);
             }
@@ -140,7 +140,6 @@ class TripRequestController extends Controller
     {
         $user = $request->user();
 
-        // El Chofer no tiene permiso para editar solicitudes.
         if ($user->isDriver()) {
             return response()->json([
                 'success' => false,
@@ -148,7 +147,6 @@ class TripRequestController extends Controller
             ], 403);
         }
 
-        // Solo se puede editar si la solicitud está pendiente.
         if (! $tripRequest->isPending()) {
             return response()->json([
                 'success' => false,
@@ -156,8 +154,6 @@ class TripRequestController extends Controller
             ], 422);
         }
 
-        // Calcular el rango final real:
-        // usar la fecha del request si viene, o la ya guardada en BD si no viene.
         $finalDeparture = $request->filled('departure_date')
             ? $request->departure_date
             : $tripRequest->departure_date;
@@ -177,7 +173,6 @@ class TripRequestController extends Controller
         }
 
         $tripRequest->update($request->validated());
-
         $tripRequest->load($this->listRelations);
 
         return response()->json([
@@ -193,16 +188,13 @@ class TripRequestController extends Controller
      * Soft delete administrativo.
      *
      * Solo Admin/Operador (garantizado por middleware en rutas).
-     *
-     * Estados permitidos : pending, rejected, cancelled.
-     * Estados prohibidos : approved (vehículo comprometido),
-     *                      completed (historial operativo).
+     * Estados permitidos: pending, rejected, cancelled.
+     * Estados prohibidos: approved, completed.
      */
     public function destroy(Request $request, TripRequest $tripRequest): JsonResponse
     {
         $user = $request->user();
 
-        // El Chofer no puede hacer borrado administrativo.
         if ($user->isDriver()) {
             return response()->json([
                 'success' => false,
@@ -235,22 +227,13 @@ class TripRequestController extends Controller
     // ─── approve ──────────────────────────────────────────────────────────────
 
     /**
-     * Aprobar solicitud.
+     * Aprobar solicitud existente (flujo normal).
      *
-     * Solo Admin/Operador (garantizado por middleware en rutas).
-     *
-     * Validaciones en orden:
-     * 1. Debe estar en pending.
-     * 2. Debe tener vehicle_id asignado.
-     * 3. El vehículo no debe tener mantenimientos abiertos.
-     * 4. No debe existir solapamiento de fechas con otra solicitud approved del mismo vehículo.
-     *
-     * El controlador NO cambia el estado del vehículo.
-     * Eso lo gestiona un trigger en la base de datos.
+     * Solo Admin/Operador (garantizado por middleware).
+     * Reutiliza validateVehicleForAssignment() para no duplicar lógica.
      */
     public function approve(Request $request, TripRequest $tripRequest): JsonResponse
     {
-        // 1. Verificar que la solicitud está pendiente.
         if (! $tripRequest->isPending()) {
             return response()->json([
                 'success' => false,
@@ -258,7 +241,6 @@ class TripRequestController extends Controller
             ], 422);
         }
 
-        // 2. Verificar que tiene vehículo asignado.
         if (is_null($tripRequest->vehicle_id)) {
             return response()->json([
                 'success' => false,
@@ -266,7 +248,6 @@ class TripRequestController extends Controller
             ], 422);
         }
 
-        // 3. Verificar que el vehículo exista.
         $vehicle = Vehicle::query()
             ->where('id', $tripRequest->vehicle_id)
             ->first();
@@ -278,39 +259,19 @@ class TripRequestController extends Controller
             ], 422);
         }
 
-        // 4. Verificar que el vehículo esté disponible.
-        if (! $vehicle->isAvailable()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'El vehículo seleccionado no está disponible para aprobación. Estado actual: ' . $vehicle->status . '.',
-            ], 422);
+        // Delegar validaciones de negocio del vehículo al helper privado.
+        // Se pasa $tripRequest->id para excluirlo del chequeo de solapamiento.
+        $validationError = $this->validateVehicleForAssignment(
+            $vehicle,
+            $tripRequest->departure_date,
+            $tripRequest->return_date,
+            $tripRequest->id
+        );
+
+        if ($validationError !== null) {
+            return $validationError;
         }
 
-        // 5. Verificar que no tenga mantenimientos abiertos.
-        if ($vehicle->openMaintenances()->exists()) {
-            return response()->json([
-                'success' => false,
-                'message' => 'El vehículo seleccionado tiene un mantenimiento abierto y no puede ser asignado.',
-            ], 422);
-        }
-
-        // 6. Verificar solapamiento de fechas.
-        // Dos rangos se traslapan si: A_inicio < B_fin AND A_fin > B_inicio
-        $overlap = TripRequest::where('vehicle_id', $tripRequest->vehicle_id)
-            ->where('status', TripRequest::STATUS_APPROVED)
-            ->where('id', '!=', $tripRequest->id)
-            ->where('departure_date', '<', $tripRequest->return_date)
-            ->where('return_date', '>', $tripRequest->departure_date)
-            ->exists();
-
-        if ($overlap) {
-            return response()->json([
-                'success' => false,
-                'message' => 'El vehículo ya tiene una solicitud aprobada que se traslapa con las fechas solicitadas.',
-            ], 422);
-        }
-
-        // 7. Aprobar solicitud.
         $tripRequest->update([
             'status'      => TripRequest::STATUS_APPROVED,
             'reviewed_by' => $request->user()->id,
@@ -330,13 +291,11 @@ class TripRequestController extends Controller
     /**
      * Rechazar solicitud.
      *
-     * Solo Admin/Operador (garantizado por middleware en rutas).
-     *
-     * rejection_reason es opcional según el enunciado.
+     * Solo Admin/Operador (garantizado por middleware).
+     * rejection_reason es opcional.
      */
     public function reject(Request $request, TripRequest $tripRequest): JsonResponse
     {
-        // Solo se pueden rechazar solicitudes pendientes.
         if (! $tripRequest->isPending()) {
             return response()->json([
                 'success' => false,
@@ -365,19 +324,11 @@ class TripRequestController extends Controller
      * Cancelar solicitud.
      *
      * Accesible por: Chofer (solo las propias), Admin, Operador.
-     *
-     * Diferencia con destroy():
-     * - cancel() cambia el estado a 'cancelled'. El registro queda visible en el historial.
-     * - destroy() hace soft delete. El registro desaparece de los listados normales.
-     *
-     * Si la solicitud estaba approved y tenía vehicle_id,
-     * la liberación del vehículo la gestiona el trigger de la BD.
      */
     public function cancel(Request $request, TripRequest $tripRequest): JsonResponse
     {
         $user = $request->user();
 
-        // El Chofer solo puede cancelar sus propias solicitudes.
         if ($user->isDriver() && $tripRequest->user_id !== $user->id) {
             return response()->json([
                 'success' => false,
@@ -385,8 +336,6 @@ class TripRequestController extends Controller
             ], 403);
         }
 
-        // Usar el helper del modelo para validar si el estado permite cancelación.
-        // isCancellable() permite: pending, approved.
         if (! $tripRequest->isCancellable()) {
             return response()->json([
                 'success' => false,
@@ -405,5 +354,124 @@ class TripRequestController extends Controller
             'message' => 'Solicitud cancelada correctamente.',
             'data'    => $tripRequest,
         ]);
+    }
+
+    // ─── directAssign ─────────────────────────────────────────────────────────
+
+    /**
+     * Asignación directa (Tarjeta 15).
+     *
+     * Crea una TripRequest nueva directamente en status = approved.
+     * No pasa por el flujo pending → approved.
+     *
+     * Solo Admin/Operador (garantizado por middleware y authorize() del FormRequest).
+     *
+     * Validaciones de campos: DirectAssignTripRequest.
+     * Validaciones de negocio del vehículo: validateVehicleForAssignment().
+     *
+     * Toda la operación ocurre en una transacción de base de datos.
+     */
+    public function directAssign(DirectAssignTripRequest $request): JsonResponse
+    {
+        $vehicle = Vehicle::find($request->vehicle_id);
+
+        // validateVehicleForAssignment() verifica:
+        // 1. Vehículo disponible (status = available).
+        // 2. Sin mantenimientos abiertos.
+        // 3. Sin solapamiento de fechas con otras solicitudes approved.
+        // No se pasa $excludeId porque esta es una solicitud nueva (no existe aún en BD).
+        $validationError = $this->validateVehicleForAssignment(
+            $vehicle,
+            $request->departure_date,
+            $request->return_date
+        );
+
+        if ($validationError !== null) {
+            return $validationError;
+        }
+
+        $tripRequest = DB::transaction(function () use ($request) {
+            return TripRequest::create([
+                'user_id'        => $request->user_id,
+                'vehicle_id'     => $request->vehicle_id,
+                'route_id'       => $request->route_id,
+                'departure_date' => $request->departure_date,
+                'return_date'    => $request->return_date,
+                'reason'         => $request->reason,
+                // Campos fijados internamente — no vienen del request.
+                'status'         => TripRequest::STATUS_APPROVED,
+                'reviewed_by'    => $request->user()->id,
+            ]);
+        });
+
+        $tripRequest->load($this->listRelations);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Asignación directa creada correctamente.',
+            'data'    => $tripRequest,
+        ], 201);
+    }
+
+    // ─── Helper privado: validateVehicleForAssignment ─────────────────────────
+
+    /**
+     * Valida las reglas de negocio del vehículo antes de aprobar o asignar.
+     *
+     * Reutilizado por:
+     * - approve()       → le pasa $excludeId = $tripRequest->id
+     * - directAssign()  → no pasa $excludeId (solicitud aún no existe)
+     *
+     * Retorna un JsonResponse con error 422 si hay un problema,
+     * o null si todas las validaciones pasan.
+     *
+     * @param  Vehicle       $vehicle
+     * @param  string|Carbon $departureDate
+     * @param  string|Carbon $returnDate
+     * @param  int|null      $excludeId  ID de TripRequest a excluir del chequeo de solapamiento.
+     * @return JsonResponse|null
+     */
+    private function validateVehicleForAssignment(
+        Vehicle $vehicle,
+        $departureDate,
+        $returnDate,
+        ?int $excludeId = null
+    ): ?JsonResponse {
+
+        // 1. El vehículo debe estar disponible.
+        if (! $vehicle->isAvailable()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'El vehículo seleccionado no está disponible. Estado actual: ' . $vehicle->status . '.',
+            ], 422);
+        }
+
+        // 2. El vehículo no debe tener mantenimientos abiertos.
+        if ($vehicle->openMaintenances()->exists()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'El vehículo seleccionado tiene un mantenimiento abierto y no puede ser asignado.',
+            ], 422);
+        }
+
+        // 3. No debe existir solapamiento de fechas con otra solicitud approved del mismo vehículo.
+        // Regla: dos rangos se traslapan si A_inicio < B_fin AND A_fin > B_inicio
+        $overlapQuery = TripRequest::where('vehicle_id', $vehicle->id)
+            ->where('status', TripRequest::STATUS_APPROVED)
+            ->where('departure_date', '<', $returnDate)
+            ->where('return_date', '>', $departureDate);
+
+        if ($excludeId !== null) {
+            $overlapQuery->where('id', '!=', $excludeId);
+        }
+
+        if ($overlapQuery->exists()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'El vehículo ya tiene una solicitud aprobada que se traslapa con las fechas solicitadas.',
+            ], 422);
+        }
+
+        return null;
     }
 }
