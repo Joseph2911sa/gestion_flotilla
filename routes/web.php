@@ -33,11 +33,12 @@ Route::middleware('auth.web')->group(function () {
         Route::get('/mantenimientos', fn() => view('operador.mantenimientos.index'))->name('mantenimientos');
     });
 
-    // ── Chofer ────────────────────────────────────────────────────────────────
+// ── Chofer ────────────────────────────────────────────────────────────────
     Route::middleware('auth.web:Chofer')->prefix('chofer')->name('chofer.')->group(function () {
-        Route::get('/vehiculos',   [\App\Http\Controllers\Chofer\VehiculoController::class, 'index'])->name('vehiculos');
-        Route::get('/solicitudes', fn() => view('chofer.solicitudes.index'))->name('solicitudes');
-        Route::get('/historial',   fn() => view('chofer.historial.index'))->name('historial');
+    Route::get('/vehiculos',    [\App\Http\Controllers\Chofer\VehiculoController::class,  'index'])->name('vehiculos');
+    Route::get('/solicitudes',  [\App\Http\Controllers\Chofer\SolicitudController::class, 'index'])->name('solicitudes');
+    Route::post('/solicitudes', [\App\Http\Controllers\Chofer\SolicitudController::class, 'store'])->name('solicitudes.store');
+    Route::get('/historial',    [\App\Http\Controllers\Chofer\HistorialController::class, 'index'])->name('historial');
+    Route::post('/historial/{id}/cancelar', [\App\Http\Controllers\Chofer\HistorialController::class, 'cancelar'])->name('historial.cancelar');
     });
-
 });
