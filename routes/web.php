@@ -3,7 +3,8 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthWebController;
 use App\Http\Controllers\DashboardController;
-use App\Http\Controllers\Admin\UsuarioController;  // ← NUEVO (Tarjeta 10)
+use App\Http\Controllers\Admin\UsuarioController;
+use App\Http\Controllers\Admin\VehiculoController;
 
 // ── Rutas públicas ────────────────────────────────────────────────────────────
 Route::get('/', fn() => redirect()->route('login'));
@@ -19,16 +20,23 @@ Route::middleware('auth.web')->group(function () {
     // ── Admin ─────────────────────────────────────────────────────────────────
     Route::middleware('auth.web:Admin')->prefix('admin')->name('admin.')->group(function () {
 
-        // ── TARJETA 10: CRUD Usuarios ─────────────────────────────────────────
-        Route::get(   '/usuarios',             [UsuarioController::class, 'index']  )->name('usuarios');
-        Route::get(   '/usuarios/crear',       [UsuarioController::class, 'create'] )->name('usuarios.crear');
-        Route::post(  '/usuarios',             [UsuarioController::class, 'store']  )->name('usuarios.store');
-        Route::get(   '/usuarios/{id}/editar', [UsuarioController::class, 'edit']   )->name('usuarios.editar');
-        Route::put(   '/usuarios/{id}',        [UsuarioController::class, 'update'] )->name('usuarios.update');
-        Route::delete('/usuarios/{id}',        [UsuarioController::class, 'destroy'])->name('usuarios.destroy');
+        // ── Tarjeta 10: CRUD Usuarios ─────────────────────────────────────────
+        Route::get(   '/usuarios',             [UsuarioController::class,  'index']  )->name('usuarios');
+        Route::get(   '/usuarios/crear',       [UsuarioController::class,  'create'] )->name('usuarios.crear');
+        Route::post(  '/usuarios',             [UsuarioController::class,  'store']  )->name('usuarios.store');
+        Route::get(   '/usuarios/{id}/editar', [UsuarioController::class,  'edit']   )->name('usuarios.editar');
+        Route::put(   '/usuarios/{id}',        [UsuarioController::class,  'update'] )->name('usuarios.update');
+        Route::delete('/usuarios/{id}',        [UsuarioController::class,  'destroy'])->name('usuarios.destroy');
 
-        // ── Pendientes (próximas tarjetas) ────────────────────────────────────
-        Route::get('/vehiculos',      fn() => view('admin.vehiculos.index')     )->name('vehiculos');
+        // ── Tarjeta 11: CRUD Vehículos ────────────────────────────────────────
+        Route::get(   '/vehiculos',             [VehiculoController::class, 'index']  )->name('vehiculos');
+        Route::get(   '/vehiculos/crear',       [VehiculoController::class, 'create'] )->name('vehiculos.crear');
+        Route::post(  '/vehiculos',             [VehiculoController::class, 'store']  )->name('vehiculos.store');
+        Route::get(   '/vehiculos/{id}/editar', [VehiculoController::class, 'edit']   )->name('vehiculos.editar');
+        Route::put(   '/vehiculos/{id}',        [VehiculoController::class, 'update'] )->name('vehiculos.update');
+        Route::delete('/vehiculos/{id}',        [VehiculoController::class, 'destroy'])->name('vehiculos.destroy');
+
+        // ── Pendientes (Tarjetas 20 y 28) ─────────────────────────────────────
         Route::get('/mantenimientos', fn() => view('admin.mantenimientos.index'))->name('mantenimientos');
         Route::get('/reportes',       fn() => view('admin.reportes.index')      )->name('reportes');
         Route::get('/rutas',          fn() => view('admin.rutas.index')         )->name('rutas');
