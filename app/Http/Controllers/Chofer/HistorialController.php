@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Chofer;
 
 use App\Http\Controllers\Controller;
 use App\Models\TripRequest;
+use App\Models\Vehicle;
 use Illuminate\Http\Request;
 
 class HistorialController extends Controller
@@ -24,7 +25,8 @@ class HistorialController extends Controller
     {
         $userId = session('user')['id'];
 
-        $solicitud = TripRequest::where('id', $id)
+        $solicitud = TripRequest::with('vehicle')
+            ->where('id', $id)
             ->where('user_id', $userId)
             ->firstOrFail();
 
@@ -33,17 +35,24 @@ class HistorialController extends Controller
             return back()->with('error', 'Esta solicitud no puede ser cancelada.');
         }
 
+        // ── Guardar estado ANTES de actualizar ────────────────────────────────
+        $estabaAprobada = $solicitud->status === 'approved';
+
+        // Cancelar la solicitud
         $solicitud->update(['status' => 'cancelled']);
 
-        // Si estaba aprobada, liberar el vehículo
-        if ($solicitud->status === 'approved' && $solicitud->vehicle) {
+        // ── Si estaba aprobada, verificar si el vehículo debe liberarse ───────
+        if ($estabaAprobada && $solicitud->vehicle_id) {
+            // Verificar si hay OTRA solicitud aprobada para el mismo vehículo
             $otraAprobada = TripRequest::where('vehicle_id', $solicitud->vehicle_id)
                 ->where('status', 'approved')
                 ->where('id', '!=', $solicitud->id)
                 ->exists();
 
+            // Solo liberar si no hay otra asignación vigente
             if (!$otraAprobada) {
-                $solicitud->vehicle->update(['status' => 'available']);
+                Vehicle::where('id', $solicitud->vehicle_id)
+                    ->update(['status' => Vehicle::STATUS_AVAILABLE]);
             }
         }
 
