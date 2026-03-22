@@ -66,6 +66,22 @@
                         @endif
                     </div>
 
+                    {{-- Ruta (opcional) --}}
+                    <div class="form-group">
+                        <label for="route_id">
+                            <i class="fas fa-route mr-1"></i>Ruta <span class="text-muted">(opcional)</span>
+                        </label>
+                        <select name="route_id" id="route_id" class="form-control">
+                            <option value="">-- Sin ruta específica --</option>
+                            @foreach(\App\Models\Route::all() as $ruta)
+                                <option value="{{ $ruta->id }}"
+                                    {{ old('route_id') == $ruta->id ? 'selected' : '' }}>
+                                    {{ $ruta->name }} ({{ $ruta->origin }} → {{ $ruta->destination }})
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+
                     {{-- Fecha inicio --}}
                     <div class="form-group">
                         <label for="departure_date">
@@ -151,13 +167,10 @@
 
 @push('scripts')
 <script>
-    // Validación de fechas en tiempo real
     document.getElementById('departure_date').addEventListener('change', function() {
         const inicio = this.value;
         const finInput = document.getElementById('return_date');
         finInput.min = inicio;
-
-        // Si la fecha fin es menor que inicio, limpiarla
         if (finInput.value && finInput.value <= inicio) {
             finInput.value = '';
         }

@@ -8,6 +8,7 @@ use App\Http\Controllers\Admin\VehiculoController;
 use App\Http\Controllers\Admin\ReporteController;
 use App\Http\Controllers\Operador\SolicitudController as OperadorSolicitudController;
 use App\Http\Controllers\Operador\ViajeController as OperadorViajeController;
+use App\Http\Controllers\Operador\RutaController as OperadorRutaController;
 
 // ── Rutas públicas ────────────────────────────────────────────────────────────
 Route::get('/', fn() => redirect()->route('login'));
@@ -65,7 +66,10 @@ Route::middleware('auth.web')->group(function () {
         Route::get(   '/viajes',                    [OperadorViajeController::class, 'index']           )->name('viajes');
         Route::post(  '/viajes',                    [OperadorViajeController::class, 'store']            )->name('viajes.store');
         Route::patch( '/viajes/{id}/retorno',       [OperadorViajeController::class, 'registrarRetorno'] )->name('viajes.retorno');
-        Route::get('/rutas',          fn() => view('operador.rutas.index')         )->name('rutas');
+        Route::get(   '/rutas',        [OperadorRutaController::class, 'index']  )->name('rutas');
+        Route::post(  '/rutas',        [OperadorRutaController::class, 'store']  )->name('rutas.store');
+        Route::put(   '/rutas/{id}',   [OperadorRutaController::class, 'update'] )->name('rutas.update');
+        Route::delete('/rutas/{id}',   [OperadorRutaController::class, 'destroy'])->name('rutas.destroy');
         Route::get('/mantenimientos', fn() => view('operador.mantenimientos.index'))->name('mantenimientos');
     });
 

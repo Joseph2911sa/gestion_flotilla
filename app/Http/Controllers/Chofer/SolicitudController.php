@@ -55,6 +55,7 @@ class SolicitudController extends Controller
         TripRequest::create([
             'user_id'        => session('user')['id'],
             'vehicle_id'     => $request->vehicle_id,
+            'route_id'       => $request->route_id, 
             'departure_date' => $request->departure_date,
             'return_date'    => $request->return_date,
             'reason'         => $request->reason,
