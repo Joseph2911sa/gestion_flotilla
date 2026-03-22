@@ -7,6 +7,7 @@ use App\Http\Controllers\Admin\UsuarioController;
 use App\Http\Controllers\Admin\VehiculoController;
 use App\Http\Controllers\Admin\ReporteController;
 use App\Http\Controllers\Operador\SolicitudController as OperadorSolicitudController;
+use App\Http\Controllers\Operador\ViajeController as OperadorViajeController;
 
 // ── Rutas públicas ────────────────────────────────────────────────────────────
 Route::get('/', fn() => redirect()->route('login'));
@@ -51,15 +52,19 @@ Route::middleware('auth.web')->group(function () {
 
     // ── Operador ──────────────────────────────────────────────────────────────
     Route::middleware('auth.web:Admin,Operador')->prefix('operador')->name('operador.')->group(function () {
+        
 
         // Tarjeta 20: Panel Operador
         Route::get(   '/solicitudes',                    [OperadorSolicitudController::class, 'index']           )->name('solicitudes');
         Route::patch( '/solicitudes/{id}/aprobar',       [OperadorSolicitudController::class, 'aprobar']         )->name('solicitudes.aprobar');
         Route::patch( '/solicitudes/{id}/rechazar',      [OperadorSolicitudController::class, 'rechazar']        )->name('solicitudes.rechazar');
         Route::post(  '/solicitudes/asignacion-directa', [OperadorSolicitudController::class, 'asignacionDirecta'])->name('solicitudes.directa');
+        Route::get('/solicitudes/asignacion-directa', [\App\Http\Controllers\Operador\SolicitudController::class, 'createDirecta'])->name('solicitudes.directa.form');
 
         // Pendientes
-        Route::get('/viajes',         fn() => view('operador.viajes.index')        )->name('viajes');
+        Route::get(   '/viajes',                    [OperadorViajeController::class, 'index']           )->name('viajes');
+        Route::post(  '/viajes',                    [OperadorViajeController::class, 'store']            )->name('viajes.store');
+        Route::patch( '/viajes/{id}/retorno',       [OperadorViajeController::class, 'registrarRetorno'] )->name('viajes.retorno');
         Route::get('/rutas',          fn() => view('operador.rutas.index')         )->name('rutas');
         Route::get('/mantenimientos', fn() => view('operador.mantenimientos.index'))->name('mantenimientos');
     });
