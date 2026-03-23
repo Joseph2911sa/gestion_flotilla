@@ -23,8 +23,7 @@ class MantenimientoController extends Controller
         if ($statusFiltro)   $query->where('status', $statusFiltro);
 
         $paginado  = $query->paginate(10, ['*'], 'page', $page);
-        $vehiculos = Vehicle::orderBy('plate')->get(['id', 'plate', 'brand', 'model']);
-
+       $vehiculos = Vehicle::orderBy('plate')->get(['id', 'plate', 'brand', 'model', 'status']);
         return view('admin.mantenimientos.index', [
             'mantenimientos' => $paginado->items(),
             'paginado'       => [
