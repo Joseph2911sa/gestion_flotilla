@@ -6,9 +6,12 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Admin\UsuarioController;
 use App\Http\Controllers\Admin\VehiculoController;
 use App\Http\Controllers\Admin\ReporteController;
+use App\Http\Controllers\Admin\RutaController as AdminRutaController;
+use App\Http\Controllers\Admin\MantenimientoController as AdminMantenimientoController;
 use App\Http\Controllers\Operador\SolicitudController as OperadorSolicitudController;
 use App\Http\Controllers\Operador\ViajeController as OperadorViajeController;
 use App\Http\Controllers\Operador\RutaController as OperadorRutaController;
+use App\Http\Controllers\Operador\MantenimientoController as OperadorMantenimientoController;
 
 // ── Rutas públicas ────────────────────────────────────────────────────────────
 Route::get('/', fn() => redirect()->route('login'));
@@ -40,37 +43,49 @@ Route::middleware('auth.web')->group(function () {
         Route::put(   '/vehiculos/{id}',        [VehiculoController::class, 'update'] )->name('vehiculos.update');
         Route::delete('/vehiculos/{id}',        [VehiculoController::class, 'destroy'])->name('vehiculos.destroy');
 
-        // Tarjeta 28: Reportes
-        Route::get('/reportes',                        [ReporteController::class, 'index']          )->name('reportes');
-        Route::get('/reportes/disponibilidad',         [ReporteController::class, 'disponibilidad'] )->name('reportes.disponibilidad');
-        Route::get('/reportes/uso-flotilla',           [ReporteController::class, 'usoFlotilla']    )->name('reportes.uso-flotilla');
-        Route::get('/reportes/historial-chofer',       [ReporteController::class, 'historialChofer'])->name('reportes.historial-chofer');
+        // Tarjeta 25: Admin Rutas
+        Route::get(   '/rutas',          [AdminRutaController::class, 'index']  )->name('rutas');
+        Route::post(  '/rutas',          [AdminRutaController::class, 'store']  )->name('rutas.store');
+        Route::put(   '/rutas/{id}',     [AdminRutaController::class, 'update'] )->name('rutas.update');
+        Route::delete('/rutas/{id}',     [AdminRutaController::class, 'destroy'])->name('rutas.destroy');
 
-        // Pendientes
-        Route::get('/mantenimientos', fn() => view('admin.mantenimientos.index'))->name('mantenimientos');
-        Route::get('/rutas',          fn() => view('admin.rutas.index')         )->name('rutas');
+        // Tarjeta 26: Admin Mantenimientos
+        Route::get(   '/mantenimientos',             [AdminMantenimientoController::class, 'index'] )->name('mantenimientos');
+        Route::post(  '/mantenimientos',             [AdminMantenimientoController::class, 'store'] )->name('mantenimientos.store');
+        Route::patch( '/mantenimientos/{id}/cerrar', [AdminMantenimientoController::class, 'cerrar'])->name('mantenimientos.cerrar');
+
+        // Tarjeta 28: Reportes
+        Route::get('/reportes',                  [ReporteController::class, 'index']          )->name('reportes');
+        Route::get('/reportes/disponibilidad',   [ReporteController::class, 'disponibilidad'] )->name('reportes.disponibilidad');
+        Route::get('/reportes/uso-flotilla',     [ReporteController::class, 'usoFlotilla']    )->name('reportes.uso-flotilla');
+        Route::get('/reportes/historial-chofer', [ReporteController::class, 'historialChofer'])->name('reportes.historial-chofer');
     });
 
     // ── Operador ──────────────────────────────────────────────────────────────
     Route::middleware('auth.web:Admin,Operador')->prefix('operador')->name('operador.')->group(function () {
-        
 
-        // Tarjeta 20: Panel Operador
+        // Tarjeta 20: Solicitudes
         Route::get(   '/solicitudes',                    [OperadorSolicitudController::class, 'index']           )->name('solicitudes');
         Route::patch( '/solicitudes/{id}/aprobar',       [OperadorSolicitudController::class, 'aprobar']         )->name('solicitudes.aprobar');
         Route::patch( '/solicitudes/{id}/rechazar',      [OperadorSolicitudController::class, 'rechazar']        )->name('solicitudes.rechazar');
         Route::post(  '/solicitudes/asignacion-directa', [OperadorSolicitudController::class, 'asignacionDirecta'])->name('solicitudes.directa');
-        Route::get('/solicitudes/asignacion-directa', [\App\Http\Controllers\Operador\SolicitudController::class, 'createDirecta'])->name('solicitudes.directa.form');
+        Route::get(   '/solicitudes/asignacion-directa', [OperadorSolicitudController::class, 'createDirecta']   )->name('solicitudes.directa.form');
 
-        // Pendientes
-        Route::get(   '/viajes',                    [OperadorViajeController::class, 'index']           )->name('viajes');
-        Route::post(  '/viajes',                    [OperadorViajeController::class, 'store']            )->name('viajes.store');
-        Route::patch( '/viajes/{id}/retorno',       [OperadorViajeController::class, 'registrarRetorno'] )->name('viajes.retorno');
-        Route::get(   '/rutas',        [OperadorRutaController::class, 'index']  )->name('rutas');
-        Route::post(  '/rutas',        [OperadorRutaController::class, 'store']  )->name('rutas.store');
-        Route::put(   '/rutas/{id}',   [OperadorRutaController::class, 'update'] )->name('rutas.update');
-        Route::delete('/rutas/{id}',   [OperadorRutaController::class, 'destroy'])->name('rutas.destroy');
-        Route::get('/mantenimientos', fn() => view('operador.mantenimientos.index'))->name('mantenimientos');
+        // Viajes (ya implementado)
+        Route::get(   '/viajes',              [OperadorViajeController::class, 'index']           )->name('viajes');
+        Route::post(  '/viajes',              [OperadorViajeController::class, 'store']            )->name('viajes.store');
+        Route::patch( '/viajes/{id}/retorno', [OperadorViajeController::class, 'registrarRetorno'] )->name('viajes.retorno');
+
+        // Rutas (ya implementado)
+        Route::get(   '/rutas',      [OperadorRutaController::class, 'index']  )->name('rutas');
+        Route::post(  '/rutas',      [OperadorRutaController::class, 'store']  )->name('rutas.store');
+        Route::put(   '/rutas/{id}', [OperadorRutaController::class, 'update'] )->name('rutas.update');
+        Route::delete('/rutas/{id}', [OperadorRutaController::class, 'destroy'])->name('rutas.destroy');
+
+        // Tarjeta 24: Operador Mantenimientos
+        Route::get(   '/mantenimientos',             [OperadorMantenimientoController::class, 'index'] )->name('mantenimientos');
+        Route::post(  '/mantenimientos',             [OperadorMantenimientoController::class, 'store'] )->name('mantenimientos.store');
+        Route::patch( '/mantenimientos/{id}/cerrar', [OperadorMantenimientoController::class, 'cerrar'])->name('mantenimientos.cerrar');
     });
 
     // ── Chofer ────────────────────────────────────────────────────────────────
