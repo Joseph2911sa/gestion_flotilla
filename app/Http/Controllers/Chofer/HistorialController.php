@@ -3,57 +3,30 @@
 namespace App\Http\Controllers\Chofer;
 
 use App\Http\Controllers\Controller;
-use App\Models\TripRequest;
-use App\Models\Vehicle;
+use App\Http\Controllers\Concerns\ApiConsumer;
 use Illuminate\Http\Request;
 
 class HistorialController extends Controller
 {
+    use ApiConsumer;
+
     public function index()
     {
-        $userId = session('user')['id'];
+        // El API filtra automáticamente por el chofer autenticado (token)
+        $response = $this->apiGet('trip-requests', ['page' => 1, 'per_page' => 10]);
 
-        $solicitudes = TripRequest::with(['vehicle:id,plate,brand,model', 'reviewer:id,name'])
-            ->where('user_id', $userId)
-            ->latest()
-            ->paginate(10);
+        $paginado    = $response->json('data') ?? [];
+        $solicitudes = collect($paginado['data'] ?? []);
 
-        return view('chofer.historial.index', compact('solicitudes'));
+        return view('chofer.historial.index', compact('solicitudes', 'paginado'));
     }
 
-    public function cancelar(Request $request, $id)
+    public function cancelar(Request $request, int $id)
     {
-        $userId = session('user')['id'];
+        $response = $this->apiPatch("trip-requests/{$id}/cancel");
 
-        $solicitud = TripRequest::with('vehicle')
-            ->where('id', $id)
-            ->where('user_id', $userId)
-            ->firstOrFail();
-
-        // Solo se puede cancelar si está pendiente o aprobada
-        if (!in_array($solicitud->status, ['pending', 'approved'])) {
-            return back()->with('error', 'Esta solicitud no puede ser cancelada.');
-        }
-
-        // ── Guardar estado ANTES de actualizar ────────────────────────────────
-        $estabaAprobada = $solicitud->status === 'approved';
-
-        // Cancelar la solicitud
-        $solicitud->update(['status' => 'cancelled']);
-
-        // ── Si estaba aprobada, verificar si el vehículo debe liberarse ───────
-        if ($estabaAprobada && $solicitud->vehicle_id) {
-            // Verificar si hay OTRA solicitud aprobada para el mismo vehículo
-            $otraAprobada = TripRequest::where('vehicle_id', $solicitud->vehicle_id)
-                ->where('status', 'approved')
-                ->where('id', '!=', $solicitud->id)
-                ->exists();
-
-            // Solo liberar si no hay otra asignación vigente
-            if (!$otraAprobada) {
-                Vehicle::where('id', $solicitud->vehicle_id)
-                    ->update(['status' => Vehicle::STATUS_AVAILABLE]);
-            }
+        if ($response->failed()) {
+            return back()->with('error', $response->json('message') ?? 'No se puede cancelar la solicitud.');
         }
 
         return back()->with('success', 'Solicitud cancelada correctamente.');

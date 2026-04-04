@@ -108,11 +108,11 @@ Route::prefix('v1')->group(function () {
         Route::apiResource('trips', TripController::class)
             ->middleware('role:Admin,Operador');
 
-        Route::patch(
-            'trips/{trip}/register-return',
-            [TripController::class, 'registerReturn']
-        )->middleware('role:Chofer,Admin')
-         ->name('trips.register-return');
+       Route::patch(
+    'trips/{trip}/register-return',
+    [TripController::class, 'registerReturn']
+)->middleware('role:Chofer,Admin,Operador')
+ ->name('trips.register-return');
 
         // ── Maintenances ──────────────────────────────────────────────────────
 

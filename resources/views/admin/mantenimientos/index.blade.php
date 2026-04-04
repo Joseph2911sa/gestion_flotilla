@@ -21,8 +21,8 @@ $tipoLabels = [
             <select name="vehicle_id" class="form-control form-control-sm">
                 <option value="">Todos los vehículos</option>
                 @foreach($vehiculos as $v)
-                    <option value="{{ $v->id }}" {{ $vehiculoFiltro == $v->id ? 'selected' : '' }}>
-                        {{ $v->plate }} — {{ $v->brand }} {{ $v->model }}
+                    <option value="{{ $v['id'] ?? $v["id"] }}" {{ $vehiculoFiltro == ($v['id'] ?? $v["id"]) ? 'selected' : '' }}>
+                        {{ $v['plate'] }} — {{ $v['brand'] }} {{ $v['model'] }}
                     </option>
                 @endforeach
             </select>
@@ -184,9 +184,9 @@ $tipoLabels = [
                                 class="form-control @error('vehicle_id') is-invalid @enderror">
                             <option value="">— Seleccione vehículo disponible —</option>
                             @foreach($vehiculos as $v)
-                                @if(isset($v->status) && $v->status === 'available')
-                                <option value="{{ $v->id }}" {{ old('vehicle_id') == $v->id ? 'selected' : '' }}>
-                                    {{ $v->plate }} — {{ $v->brand }} {{ $v->model }}
+                                @if(isset($v['status']) && $v['status'] === 'available')
+                                <option value="{{ $v['id'] ?? $v["id"] }}" {{ old('vehicle_id') == $v['id'] ? 'selected' : '' }}>
+                                    {{ $v['plate'] }} — {{ $v['brand'] }} {{ $v['model'] }}
                                 </option>
                                 @endif
                             @endforeach

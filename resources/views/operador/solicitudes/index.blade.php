@@ -12,6 +12,7 @@ $statusConfig = [
     'rejected'  => ['label'=>'Rechazadas',  'badge'=>'danger',    'icon'=>'times-circle'],
     'cancelled' => ['label'=>'Canceladas',  'badge'=>'secondary', 'icon'=>'ban'],
     'completed' => ['label'=>'Completadas', 'badge'=>'primary',   'icon'=>'flag-checkered'],
+    'all'       => ['label'=>'Todas',       'badge'=>'secondary', 'icon'=>'list'],
 ];
 @endphp
 
@@ -95,7 +96,7 @@ $statusConfig = [
                             <small class="text-muted">{{ $s['user']['email'] ?? '' }}</small>
                         </td>
                         <td>
-                            @if($s['vehicle'])
+                            @if(!empty($s['vehicle']))
                                 <strong>{{ $s['vehicle']['plate'] }}</strong>
                                 <small class="d-block text-muted">
                                     {{ $s['vehicle']['brand'] }} {{ $s['vehicle']['model'] }}
@@ -106,14 +107,14 @@ $statusConfig = [
                         </td>
                         <td>
                             <small>
-                                {{ $s['departure_date']
+                                {{ !empty($s['departure_date'])
                                     ? \Carbon\Carbon::parse($s['departure_date'])->format('d/m/Y H:i')
                                     : '—' }}
                             </small>
                         </td>
                         <td>
                             <small>
-                                {{ $s['return_date']
+                                {{ !empty($s['return_date'])
                                     ? \Carbon\Carbon::parse($s['return_date'])->format('d/m/Y H:i')
                                     : '—' }}
                             </small>
@@ -123,7 +124,7 @@ $statusConfig = [
                         </td>
                         <td>
                             <span class="badge badge-{{ $cfg['badge'] }}">{{ $cfg['label'] }}</span>
-                            @if($s['rejection_reason'])
+                            @if(!empty($s['rejection_reason']))
                                 <i class="fas fa-info-circle text-muted ml-1"
                                    title="{{ $s['rejection_reason'] }}"
                                    data-toggle="tooltip"></i>
@@ -190,7 +191,7 @@ $statusConfig = [
     </div>
 </div>
 
-{{-- ── MODAL: Rechazar solicitud ──────────────────────────────────────────── --}}
+{{-- Modal: Rechazar --}}
 <div class="modal fade" id="modalRechazar" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -206,12 +207,10 @@ $statusConfig = [
                 <div class="modal-body">
                     <p>Rechazando solicitud de: <strong id="choferRechazar"></strong></p>
                     <div class="form-group mb-0">
-                        <label for="rejection_reason">
-                            Motivo del rechazo <small class="text-muted">(opcional)</small>
-                        </label>
+                        <label>Motivo del rechazo <small class="text-muted">(opcional)</small></label>
                         <textarea id="rejection_reason" name="rejection_reason"
                                   class="form-control" rows="3"
-                                  placeholder="Describe el motivo del rechazo..."></textarea>
+                                  placeholder="Describe el motivo..."></textarea>
                     </div>
                 </div>
                 <div class="modal-footer">
@@ -225,7 +224,7 @@ $statusConfig = [
     </div>
 </div>
 
-{{-- ── MODAL: Asignación directa ──────────────────────────────────────────── --}}
+{{-- Modal: Asignación Directa --}}
 <div class="modal fade" id="modalAsignacion" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
@@ -240,18 +239,19 @@ $statusConfig = [
                 <div class="modal-body">
                     <div class="callout callout-info py-2 px-3 mb-3 small">
                         <i class="fas fa-info-circle mr-1"></i>
-                        Crea una asignación directamente aprobada sin pasar por solicitud del chofer.
+                        Crea una asignación directamente aprobada sin solicitud previa del chofer.
                     </div>
 
                     <div class="row">
                         <div class="col-md-6">
                             <div class="form-group">
-                                <label for="user_id">Chofer <span class="text-danger">*</span></label>
-                                <select name="user_id" id="user_id" class="form-control">
+                                <label>Chofer <span class="text-danger">*</span></label>
+                                <select name="user_id" class="form-control">
                                     <option value="">— Seleccione chofer —</option>
-                                    @foreach(\App\Models\User::whereHas('role', fn($q) => $q->where('name','Chofer'))->get() as $chofer)
-                                        <option value="{{ $chofer->id }}" {{ old('user_id') == $chofer->id ? 'selected' : '' }}>
-                                            {{ $chofer->name }}
+                                    @foreach($choferes as $ch)
+                                    @php $c = is_array($ch) ? $ch : $ch->toArray(); @endphp
+                                        <option value="{{ $c['id'] }}" {{ old('user_id') == $c['id'] ? 'selected' : '' }}>
+                                            {{ $c['name'] }}
                                         </option>
                                     @endforeach
                                 </select>
@@ -259,12 +259,13 @@ $statusConfig = [
                         </div>
                         <div class="col-md-6">
                             <div class="form-group">
-                                <label for="vehicle_id">Vehículo <span class="text-danger">*</span></label>
-                                <select name="vehicle_id" id="vehicle_id" class="form-control">
+                                <label>Vehículo <span class="text-danger">*</span></label>
+                                <select name="vehicle_id" class="form-control">
                                     <option value="">— Seleccione vehículo —</option>
-                                    @foreach(\App\Models\Vehicle::where('status','available')->get() as $v)
-                                        <option value="{{ $v->id }}" {{ old('vehicle_id') == $v->id ? 'selected' : '' }}>
-                                            {{ $v->plate }} — {{ $v->brand }} {{ $v->model }}
+                                    @foreach($vehiculos as $vh)
+                                    @php $v = is_array($vh) ? $vh : $vh->toArray(); @endphp
+                                        <option value="{{ $v['id'] }}" {{ old('vehicle_id') == $v['id'] ? 'selected' : '' }}>
+                                            {{ $v['plate'] }} — {{ $v['brand'] }} {{ $v['model'] }}
                                         </option>
                                     @endforeach
                                 </select>
@@ -275,15 +276,15 @@ $statusConfig = [
                     <div class="row">
                         <div class="col-md-6">
                             <div class="form-group">
-                                <label for="departure_date">Fecha/Hora Salida <span class="text-danger">*</span></label>
-                                <input type="datetime-local" name="departure_date" id="departure_date"
+                                <label>Fecha/Hora Salida <span class="text-danger">*</span></label>
+                                <input type="datetime-local" name="departure_date"
                                        class="form-control" value="{{ old('departure_date') }}">
                             </div>
                         </div>
                         <div class="col-md-6">
                             <div class="form-group">
-                                <label for="return_date">Fecha/Hora Retorno <span class="text-danger">*</span></label>
-                                <input type="datetime-local" name="return_date" id="return_date"
+                                <label>Fecha/Hora Retorno <span class="text-danger">*</span></label>
+                                <input type="datetime-local" name="return_date"
                                        class="form-control" value="{{ old('return_date') }}">
                             </div>
                         </div>
@@ -292,12 +293,13 @@ $statusConfig = [
                     <div class="row">
                         <div class="col-md-6">
                             <div class="form-group">
-                                <label for="route_id">Ruta <small class="text-muted">(opcional)</small></label>
-                                <select name="route_id" id="route_id" class="form-control">
+                                <label>Ruta <small class="text-muted">(opcional)</small></label>
+                                <select name="route_id" class="form-control">
                                     <option value="">— Sin ruta específica —</option>
-                                    @foreach(\App\Models\Route::all() as $ruta)
-                                        <option value="{{ $ruta->id }}" {{ old('route_id') == $ruta->id ? 'selected' : '' }}>
-                                            {{ $ruta->name }} ({{ $ruta->origin }} → {{ $ruta->destination }})
+                                    @foreach($rutas as $rt)
+                                    @php $r = is_array($rt) ? $rt : $rt->toArray(); @endphp
+                                        <option value="{{ $r['id'] }}" {{ old('route_id') == $r['id'] ? 'selected' : '' }}>
+                                            {{ $r['name'] }} ({{ $r['origin'] }} → {{ $r['destination'] }})
                                         </option>
                                     @endforeach
                                 </select>
@@ -305,9 +307,9 @@ $statusConfig = [
                         </div>
                         <div class="col-md-6">
                             <div class="form-group">
-                                <label for="reason">Motivo <small class="text-muted">(opcional)</small></label>
-                                <input type="text" name="reason" id="reason"
-                                       class="form-control" placeholder="Ej: Viaje urgente a sede central"
+                                <label>Motivo <small class="text-muted">(opcional)</small></label>
+                                <input type="text" name="reason" class="form-control"
+                                       placeholder="Ej: Viaje urgente a sede central"
                                        value="{{ old('reason') }}" maxlength="500">
                             </div>
                         </div>
@@ -329,25 +331,19 @@ $statusConfig = [
 @push('scripts')
 <script>
 $(function () {
-    // Tooltips
     $('[data-toggle="tooltip"]').tooltip();
 
-    // Modal rechazar
     $(document).on('click', '.btn-rechazar', function () {
-        const id     = $(this).data('id');
-        const chofer = $(this).data('chofer');
-        $('#choferRechazar').text(chofer);
-        $('#formRechazar').attr('action', '/operador/solicitudes/' + id + '/rechazar');
+        $('#choferRechazar').text($(this).data('chofer'));
+        $('#formRechazar').attr('action', '/operador/solicitudes/' + $(this).data('id') + '/rechazar');
         $('#rejection_reason').val('');
         $('#modalRechazar').modal('show');
     });
 
-    // Abrir modal asignación directa si hay errores de validación
     @if($errors->any() && old('user_id'))
         $('#modalAsignacion').modal('show');
     @endif
 
-    // Validar que retorno > salida
     $('#return_date').on('change', function () {
         const salida  = $('#departure_date').val();
         const retorno = $(this).val();

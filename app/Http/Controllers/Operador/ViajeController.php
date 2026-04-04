@@ -3,57 +3,46 @@
 namespace App\Http\Controllers\Operador;
 
 use App\Http\Controllers\Controller;
-use App\Models\Trip;
-use App\Models\TripRequest;
-use App\Models\Vehicle;
-use App\Models\User;
-use App\Models\Route;
+use App\Http\Controllers\Concerns\ApiConsumer;
 use Illuminate\Http\Request;
 
 class ViajeController extends Controller
 {
+    use ApiConsumer;
+
     public function index(Request $request)
     {
-        $query = Trip::with([
-            'driver:id,name,email',
-            'vehicle:id,plate,brand,model',
-            'route:id,name,origin,destination',
-            'tripRequest:id,departure_date,return_date,status',
-        ])->latest();
+        $params = ['page' => $request->query('page', 1)];
+        if ($request->filled('driver_id'))  $params['driver_id']  = $request->driver_id;
+        if ($request->filled('vehicle_id')) $params['vehicle_id'] = $request->vehicle_id;
 
-        // Filtros opcionales
-        if ($request->filled('driver_id')) {
-            $query->where('driver_id', $request->driver_id);
-        }
-        if ($request->filled('vehicle_id')) {
-            $query->where('vehicle_id', $request->vehicle_id);
+        $response = $this->apiGet('trips', $params);
+
+        if ($response->failed()) {
+            return back()->with('error', 'No se pudo cargar los viajes.');
         }
 
-        $viajes = $query->paginate(10);
+        $paginado = $response->json('data');
+        $viajes   = collect($paginado['data'] ?? []);
 
-        // Para los selectores del formulario de registro
-        $solicitudesAprobadas = TripRequest::with(['user:id,name', 'vehicle:id,plate,brand,model'])
-            ->where('status', 'approved')
-            ->whereDoesntHave('trip')
-            ->get();
+        // Solicitudes aprobadas sin viaje para el formulario de salida
+        $rSolicitudes     = $this->apiGet('trip-requests', ['status' => 'approved', 'per_page' => 999]);
+        $todasSolicitudes = collect($rSolicitudes->json('data.data') ?? []);
 
-        $choferes  = User::whereHas('role', fn($q) => $q->where('name', 'Chofer'))->get();
-        $vehiculos = Vehicle::whereIn('status', ['available', 'in_use'])->get();
-        $rutas     = Route::all();
+        // Filtrar las que NO tienen viaje aún (trip vacío o null)
+        $solicitudesAprobadas = $todasSolicitudes->filter(
+            fn($s) => empty($s['trip'])
+        )->values();
 
         return view('operador.viajes.index', compact(
-            'viajes',
-            'solicitudesAprobadas',
-            'choferes',
-            'vehiculos',
-            'rutas'
+            'viajes', 'solicitudesAprobadas', 'paginado'
         ));
     }
 
     public function store(Request $request)
     {
         $request->validate([
-            'trip_request_id' => 'required|exists:trip_requests,id',
+            'trip_request_id' => 'required',
             'start_mileage'   => 'required|integer|min:0',
             'start_time'      => 'required|date',
             'observations'    => 'nullable|string|max:500',
@@ -63,23 +52,35 @@ class ViajeController extends Controller
             'start_time.required'      => 'La fecha/hora de salida es obligatoria.',
         ]);
 
-        $solicitud = TripRequest::with('vehicle')->find($request->trip_request_id);
+        // Obtener los datos de la solicitud para extraer vehicle_id y driver_id
+        $rSolicitud = $this->apiGet("trip-requests/{$request->trip_request_id}");
 
-        // Crear el viaje
-        Trip::create([
-            'trip_request_id' => $solicitud->id,
-            'vehicle_id'      => $solicitud->vehicle_id,
-            'driver_id'       => $solicitud->user_id,
-            'route_id'        => $solicitud->route_id,
+        if ($rSolicitud->failed()) {
+            return back()->with('error', 'No se pudo cargar la solicitud seleccionada.');
+        }
+
+        $solicitud = $rSolicitud->json('data');
+
+        // El API de trips espera: trip_request_id, vehicle_id, driver_id, route_id, start_time, start_mileage
+        $response = $this->apiPost('trips', [
+            'trip_request_id' => (int) $request->trip_request_id,
+            'vehicle_id'      => (int) ($solicitud['vehicle_id'] ?? $solicitud['vehicle']['id'] ?? 0),
+            'driver_id'       => (int) ($solicitud['user_id']    ?? $solicitud['user']['id']    ?? 0),
+            'route_id'        => $solicitud['route_id'] ?? null,
             'start_time'      => $request->start_time,
-            'start_mileage'   => $request->start_mileage,
+            'start_mileage'   => (int) $request->start_mileage,
             'observations'    => $request->observations,
         ]);
+
+        if ($response->failed()) {
+            $msg = $response->json('message') ?? 'Error al registrar la salida.';
+            return back()->with('error', $msg);
+        }
 
         return back()->with('success', 'Salida registrada correctamente.');
     }
 
-    public function registrarRetorno(Request $request, $id)
+    public function registrarRetorno(Request $request, int $id)
     {
         $request->validate([
             'end_time'     => 'required|date',
@@ -90,36 +91,14 @@ class ViajeController extends Controller
             'end_mileage.required' => 'El kilometraje final es obligatorio.',
         ]);
 
-        $viaje = Trip::find($id);
-
-        if (!$viaje) {
-            return back()->with('error', 'Viaje no encontrado.');
-        }
-
-        if ($viaje->isCompleted()) {
-            return back()->with('error', 'Este viaje ya fue completado.');
-        }
-
-        // Validar kilometraje
-        if ($request->end_mileage < $viaje->start_mileage) {
-            return back()->with('error',
-                "El kilometraje final ({$request->end_mileage}) no puede ser menor al inicial ({$viaje->start_mileage}).");
-        }
-
-        $viaje->update([
+        $response = $this->apiPatch("trips/{$id}/register-return", [
             'end_time'     => $request->end_time,
-            'end_mileage'  => $request->end_mileage,
-            'observations' => $request->observations ?? $viaje->observations,
+            'end_mileage'  => (int) $request->end_mileage,
+            'observations' => $request->observations,
         ]);
 
-        // Liberar vehículo
-        if ($viaje->vehicle) {
-            $viaje->vehicle->update(['status' => Vehicle::STATUS_AVAILABLE]);
-        }
-
-        // Marcar solicitud como completada
-        if ($viaje->tripRequest) {
-            $viaje->tripRequest->update(['status' => 'completed']);
+        if ($response->failed()) {
+            return back()->with('error', $response->json('message') ?? 'Error al registrar el retorno.');
         }
 
         return back()->with('success', 'Retorno registrado correctamente. Vehículo liberado.');

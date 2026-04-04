@@ -3,83 +3,93 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\Route;
+use App\Http\Controllers\Concerns\ApiConsumer;
 use Illuminate\Http\Request;
 
 class RutaController extends Controller
 {
-    // ── GET /admin/rutas ──────────────────────────────────────────────────────
+    use ApiConsumer;
+
     public function index(Request $request)
     {
-        $page     = (int) $request->query('page', 1);
-        $paginado = Route::latest()->paginate(10, ['*'], 'page', $page);
+        $response = $this->apiGet('routes', ['page' => $request->query('page', 1)]);
+
+        if ($response->failed()) {
+            return back()->with('error', 'No se pudo cargar la lista de rutas.');
+        }
+
+        $paginado = $response->json('data');
 
         return view('admin.rutas.index', [
-            'rutas'   => $paginado->items(),
+            'rutas'    => $paginado['data'] ?? [],
             'paginado' => [
-                'current_page' => $paginado->currentPage(),
-                'last_page'    => $paginado->lastPage(),
-                'total'        => $paginado->total(),
+                'current_page' => $paginado['current_page'],
+                'last_page'    => $paginado['last_page'],
+                'total'        => $paginado['total'],
             ],
         ]);
     }
 
-    // ── POST /admin/rutas ─────────────────────────────────────────────────────
     public function store(Request $request)
     {
         $request->validate([
-            'name'              => 'required|string|max:150',
-            'origin'            => 'required|string|max:150',
-            'destination'       => 'required|string|max:150',
-            'distance_km'       => 'nullable|numeric|min:0',
-            'estimated_minutes' => 'nullable|integer|min:1',
-            'description'       => 'nullable|string|max:500',
+            'name'        => 'required|string|max:150',
+            'origin'      => 'required|string|max:150',
+            'destination' => 'required|string|max:150',
         ], [
-            'name.required'        => 'El nombre de la ruta es obligatorio.',
-            'origin.required'      => 'El punto de inicio es obligatorio.',
-            'destination.required' => 'El punto final es obligatorio.',
+            'name.required'        => 'El nombre es obligatorio.',
+            'origin.required'      => 'El origen es obligatorio.',
+            'destination.required' => 'El destino es obligatorio.',
         ]);
 
-        Route::create($request->only([
-            'name', 'origin', 'destination',
-            'distance_km', 'estimated_minutes', 'description',
-        ]));
+        $response = $this->apiPost('routes', [
+            'name'              => $request->name,
+            'origin'            => $request->origin,
+            'destination'       => $request->destination,
+            'distance_km'       => $request->distance_km ?: null,
+            'estimated_minutes' => $request->estimated_minutes ?: null,
+            'description'       => $request->description,
+        ]);
+
+        if ($response->failed()) {
+            return $this->handleError($response, 'Error al crear la ruta.');
+        }
 
         return back()->with('success', 'Ruta creada correctamente.');
     }
 
-    // ── PUT /admin/rutas/{id} ─────────────────────────────────────────────────
     public function update(Request $request, int $id)
     {
-        $ruta = Route::findOrFail($id);
-
         $request->validate([
-            'name'              => 'required|string|max:150',
-            'origin'            => 'required|string|max:150',
-            'destination'       => 'required|string|max:150',
-            'distance_km'       => 'nullable|numeric|min:0',
-            'estimated_minutes' => 'nullable|integer|min:1',
-            'description'       => 'nullable|string|max:500',
-        ], [
-            'name.required'        => 'El nombre de la ruta es obligatorio.',
-            'origin.required'      => 'El punto de inicio es obligatorio.',
-            'destination.required' => 'El punto final es obligatorio.',
+            'name'        => 'required|string|max:150',
+            'origin'      => 'required|string|max:150',
+            'destination' => 'required|string|max:150',
         ]);
 
-        $ruta->update($request->only([
-            'name', 'origin', 'destination',
-            'distance_km', 'estimated_minutes', 'description',
-        ]));
+        $response = $this->apiPut("routes/{$id}", [
+            'name'              => $request->name,
+            'origin'            => $request->origin,
+            'destination'       => $request->destination,
+            'distance_km'       => $request->distance_km ?: null,
+            'estimated_minutes' => $request->estimated_minutes ?: null,
+            'description'       => $request->description,
+        ]);
+
+        if ($response->failed()) {
+            return $this->handleError($response, 'Error al actualizar la ruta.');
+        }
 
         return back()->with('success', 'Ruta actualizada correctamente.');
     }
 
-    // ── DELETE /admin/rutas/{id} ── Borrado lógico ────────────────────────────
     public function destroy(int $id)
     {
-        $ruta = Route::findOrFail($id);
-        $ruta->delete();
+        $response = $this->apiDelete("routes/{$id}");
 
-        return back()->with('success', 'Ruta eliminada correctamente (borrado lógico).');
+        if ($response->failed()) {
+            return back()->with('error', 'Error al eliminar la ruta.');
+        }
+
+        return back()->with('success', 'Ruta eliminada correctamente.');
     }
 }

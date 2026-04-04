@@ -3,204 +3,128 @@
 namespace App\Http\Controllers\Operador;
 
 use App\Http\Controllers\Controller;
-use App\Models\TripRequest;
-use App\Models\User;
-use App\Models\Vehicle;
-use App\Models\Route;
+use App\Http\Controllers\Concerns\ApiConsumer;
 use Illuminate\Http\Request;
 
 class SolicitudController extends Controller
 {
-    // ── GET /operador/solicitudes ─────────────────────────────────────────────
+    use ApiConsumer;
+
     public function index(Request $request)
     {
         $statusFiltro = $request->query('status', 'pending');
-        $page         = (int) $request->query('page', 1);
-
-        $query = TripRequest::with([
-            'user:id,name,email',
-            'vehicle:id,plate,brand,model,status',
-            'route:id,name,origin,destination',
-            'reviewer:id,name',
-        ])->latest();
-
+        $params       = ['page' => $request->query('page', 1)];
         if ($statusFiltro && $statusFiltro !== 'all') {
-            $query->where('status', $statusFiltro);
+            $params['status'] = $statusFiltro;
         }
 
-        $paginado = $query->paginate(10, ['*'], 'page', $page);
+        $response = $this->apiGet('trip-requests', $params);
 
-        // Contadores por estado para los tabs
-        $contadores = [
-            'pending'   => TripRequest::where('status', 'pending')->count(),
-            'approved'  => TripRequest::where('status', 'approved')->count(),
-            'rejected'  => TripRequest::where('status', 'rejected')->count(),
-            'cancelled' => TripRequest::where('status', 'cancelled')->count(),
-        ];
+        if ($response->failed()) {
+            return back()->with('error', 'No se pudo cargar las solicitudes.');
+        }
+
+        $paginado = $response->json('data');
+
+        // Contadores por estado
+        $contadores = [];
+        foreach (['pending', 'approved', 'rejected', 'cancelled'] as $st) {
+            $r = $this->apiGet('trip-requests', ['status' => $st, 'per_page' => 1]);
+            $contadores[$st] = $r->json('data.total') ?? 0;
+        }
+
+        // Cargar datos para modal de asignación directa
+        $rChoferes  = $this->apiGet('users', ['per_page' => 999]);
+        $rVehiculos = $this->apiGet('vehicles', ['status' => 'available', 'per_page' => 999]);
+        $rRutas     = $this->apiGet('routes', ['per_page' => 999]);
+
+        $todosUsuarios = collect($rChoferes->json('data.data') ?? []);
+        $choferes      = $todosUsuarios->filter(fn($u) => ($u['role']['name'] ?? '') === 'Chofer')->values();
+        $vehiculos     = collect($rVehiculos->json('data.data') ?? []);
+        $rutas         = collect($rRutas->json('data.data') ?? []);
 
         return view('operador.solicitudes.index', [
-            'solicitudes'  => $paginado->items(),
+            'solicitudes'  => $paginado['data'] ?? [],
             'paginado'     => [
-                'current_page' => $paginado->currentPage(),
-                'last_page'    => $paginado->lastPage(),
-                'total'        => $paginado->total(),
+                'current_page' => $paginado['current_page'],
+                'last_page'    => $paginado['last_page'],
+                'total'        => $paginado['total'],
             ],
             'statusFiltro' => $statusFiltro,
             'contadores'   => $contadores,
+            'choferes'     => $choferes,
+            'vehiculos'    => $vehiculos,
+            'rutas'        => $rutas,
         ]);
     }
 
-    // ── PATCH /operador/solicitudes/{id}/aprobar ──────────────────────────────
     public function aprobar(Request $request, int $id)
     {
-        $solicitud = TripRequest::with('vehicle')->find($id);
+        $response = $this->apiPatch("trip-requests/{$id}/approve");
 
-        if (!$solicitud) {
-            return back()->with('error', 'Solicitud no encontrada.');
+        if ($response->failed()) {
+            return back()->with('error', $response->json('message') ?? 'No se pudo aprobar la solicitud.');
         }
-
-        if (!$solicitud->isPending()) {
-            return back()->with('error',
-                'Solo se pueden aprobar solicitudes pendientes. Estado actual: ' . $solicitud->status);
-        }
-
-        if (!$solicitud->vehicle_id) {
-            return back()->with('error',
-                'No se puede aprobar una solicitud sin vehículo asignado.');
-        }
-
-        $vehicle = $solicitud->vehicle;
-
-        if (!$vehicle->isAvailable()) {
-            return back()->with('error',
-                'El vehículo no está disponible. Estado actual: ' . $vehicle->status);
-        }
-
-        if ($vehicle->openMaintenances()->exists()) {
-            return back()->with('error',
-                'El vehículo tiene un mantenimiento abierto y no puede ser asignado.');
-        }
-
-        // Verificar solapamiento
-        $traslape = TripRequest::where('vehicle_id', $solicitud->vehicle_id)
-            ->where('status', 'approved')
-            ->where('id', '!=', $id)
-            ->where('departure_date', '<', $solicitud->return_date)
-            ->where('return_date',    '>', $solicitud->departure_date)
-            ->exists();
-
-        if ($traslape) {
-            return back()->with('error',
-                'El vehículo ya tiene una asignación aprobada que se traslapa con estas fechas.');
-        }
-
-        // Aprobar solicitud
-        $solicitud->update([
-            'status'      => TripRequest::STATUS_APPROVED,
-            'reviewed_by' => session('user')['id'],
-        ]);
-
-        // Cambiar estado del vehículo a "in_use"
-        $vehicle->update(['status' => Vehicle::STATUS_IN_USE]);
 
         return back()->with('success', 'Solicitud aprobada correctamente.');
     }
 
-    // ── PATCH /operador/solicitudes/{id}/rechazar ─────────────────────────────
     public function rechazar(Request $request, int $id)
     {
-        $request->validate([
-            'rejection_reason' => 'nullable|string|max:500',
-        ]);
-
-        $solicitud = TripRequest::with('vehicle')->find($id);
-
-        if (!$solicitud) {
-            return back()->with('error', 'Solicitud no encontrada.');
-        }
-
-        if (!$solicitud->isPending()) {
-            return back()->with('error',
-                'Solo se pueden rechazar solicitudes pendientes. Estado actual: ' . $solicitud->status);
-        }
-
-        // Rechazar solicitud
-        $solicitud->update([
-            'status'           => TripRequest::STATUS_REJECTED,
-            'reviewed_by'      => session('user')['id'],
+        $response = $this->apiPatch("trip-requests/{$id}/reject", [
             'rejection_reason' => $request->rejection_reason,
         ]);
 
-        // Liberar vehículo si tenía uno asignado y estaba en uso
-        if ($solicitud->vehicle) {
-            $solicitud->vehicle->update(['status' => Vehicle::STATUS_AVAILABLE]);
+        if ($response->failed()) {
+            return back()->with('error', $response->json('message') ?? 'No se pudo rechazar la solicitud.');
         }
 
         return back()->with('success', 'Solicitud rechazada correctamente.');
     }
 
-    // ── POST /operador/solicitudes/asignacion-directa ─────────────────────────
     public function asignacionDirecta(Request $request)
     {
         $request->validate([
-            'user_id'        => 'required|exists:users,id',
-            'vehicle_id'     => 'required|exists:vehicles,id',
-            'departure_date' => 'required|date|after:now',
+            'user_id'        => 'required',
+            'vehicle_id'     => 'required',
+            'departure_date' => 'required|date',
             'return_date'    => 'required|date|after:departure_date',
-            'route_id'       => 'nullable|exists:routes,id',
-            'reason'         => 'nullable|string|max:500',
         ], [
             'user_id.required'        => 'Seleccione un chofer.',
             'vehicle_id.required'     => 'Seleccione un vehículo.',
             'departure_date.required' => 'La fecha de salida es obligatoria.',
-            'departure_date.after'    => 'La fecha de salida debe ser futura.',
             'return_date.required'    => 'La fecha de retorno es obligatoria.',
-            'return_date.after'       => 'La fecha de retorno debe ser posterior a la de salida.',
+            'return_date.after'       => 'El retorno debe ser posterior a la salida.',
         ]);
 
-        $vehicle = Vehicle::find($request->vehicle_id);
-
-        if (!$vehicle->isAvailable()) {
-            return back()
-                ->withInput()
-                ->with('error', 'El vehículo no está disponible. Estado: ' . $vehicle->status);
-        }
-
-        if ($vehicle->openMaintenances()->exists()) {
-            return back()
-                ->withInput()
-                ->with('error', 'El vehículo tiene un mantenimiento abierto.');
-        }
-
-        // Verificar solapamiento
-        $traslape = TripRequest::where('vehicle_id', $request->vehicle_id)
-            ->where('status', 'approved')
-            ->where('departure_date', '<', $request->return_date)
-            ->where('return_date',    '>', $request->departure_date)
-            ->exists();
-
-        if ($traslape) {
-            return back()
-                ->withInput()
-                ->with('error', 'El vehículo tiene una asignación aprobada que se traslapa con esas fechas.');
-        }
-
-        // Crear asignación directa ya aprobada
-        TripRequest::create([
-            'user_id'        => $request->user_id,
-            'vehicle_id'     => $request->vehicle_id,
-            'route_id'       => $request->route_id,
+        $response = $this->apiPost('trip-requests/direct-assign', [
+            'user_id'        => (int) $request->user_id,
+            'vehicle_id'     => (int) $request->vehicle_id,
+            'route_id'       => $request->route_id ? (int) $request->route_id : null,
             'departure_date' => $request->departure_date,
             'return_date'    => $request->return_date,
             'reason'         => $request->reason,
-            'status'         => TripRequest::STATUS_APPROVED,
-            'reviewed_by'    => session('user')['id'],
         ]);
 
-        // Cambiar estado del vehículo a "in_use"
-        $vehicle->update(['status' => Vehicle::STATUS_IN_USE]);
+        if ($response->failed()) {
+            return $this->handleError($response, 'Error al crear la asignación directa.');
+        }
 
         return redirect()->route('operador.solicitudes')
             ->with('success', 'Asignación directa creada correctamente.');
+    }
+
+    public function createDirecta()
+    {
+        $rChoferes  = $this->apiGet('users', ['per_page' => 999]);
+        $rVehiculos = $this->apiGet('vehicles', ['status' => 'available', 'per_page' => 999]);
+        $rRutas     = $this->apiGet('routes', ['per_page' => 999]);
+
+        $todosUsuarios = collect($rChoferes->json('data.data') ?? []);
+        $choferes      = $todosUsuarios->filter(fn($u) => ($u['role']['name'] ?? '') === 'Chofer')->values();
+        $vehiculos     = collect($rVehiculos->json('data.data') ?? []);
+        $rutas         = collect($rRutas->json('data.data') ?? []);
+
+        return view('operador.solicitudes.directa', compact('choferes', 'vehiculos', 'rutas'));
     }
 }

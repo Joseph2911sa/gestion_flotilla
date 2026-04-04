@@ -37,9 +37,10 @@ $statusConfig = [
                                 class="form-control @error('driver_id') is-invalid @enderror">
                             <option value="">— Seleccione un chofer —</option>
                             @foreach($choferes as $c)
-                                <option value="{{ $c->id }}"
-                                    {{ $driverId == $c->id ? 'selected' : '' }}>
-                                    {{ $c->name }}
+                            @php $ch = is_array($c) ? $c : $c->toArray(); @endphp
+                                <option value="{{ $ch['id'] }}"
+                                    {{ $driverId == $ch['id'] ? 'selected' : '' }}>
+                                    {{ $ch['name'] }}
                                 </option>
                             @endforeach
                         </select>
@@ -77,22 +78,27 @@ $statusConfig = [
 {{-- Resultados --}}
 @if($driverId && $startDate && $endDate)
 
+@php
+    $choferData = is_array($chofer) ? $chofer : ($chofer ? $chofer->toArray() : null);
+    $lista      = collect($solicitudes);
+@endphp
+
 {{-- Info del chofer --}}
-@if($chofer)
+@if($choferData)
 <div class="callout callout-warning mb-4">
     <div class="d-flex align-items-center">
         <i class="fas fa-user-tie fa-2x text-warning mr-3"></i>
         <div>
-            <h5 class="mb-0">{{ $chofer->name }}</h5>
+            <h5 class="mb-0">{{ $choferData['name'] }}</h5>
             <small class="text-muted">
-                {{ $chofer->email }}
+                {{ $choferData['email'] }}
                 &nbsp;·&nbsp;
                 Período: {{ \Carbon\Carbon::parse($startDate)->format('d/m/Y') }}
                 al {{ \Carbon\Carbon::parse($endDate)->format('d/m/Y') }}
             </small>
         </div>
         <div class="ml-auto text-right">
-            <div class="h4 mb-0">{{ $solicitudes->count() }}</div>
+            <div class="h4 mb-0">{{ $lista->count() }}</div>
             <small class="text-muted">solicitud(es)</small>
         </div>
     </div>
@@ -100,10 +106,10 @@ $statusConfig = [
 @endif
 
 {{-- Resumen por estado --}}
-@if($solicitudes->isNotEmpty())
+@if($lista->isNotEmpty())
 <div class="row mb-4">
     @foreach($statusConfig as $st => $cfg)
-    @php $cant = $solicitudes->where('status', $st)->count(); @endphp
+    @php $cant = $lista->filter(fn($s) => (is_array($s) ? $s['status'] : $s->status) === $st)->count(); @endphp
     @if($cant > 0)
     <div class="col-md-2 col-4 mb-2">
         <div class="small-box bg-{{ $cfg['badge'] === 'secondary' ? 'secondary' : $cfg['badge'] }}">
@@ -122,14 +128,14 @@ $statusConfig = [
     <div class="card-header">
         <h3 class="card-title">
             <i class="fas fa-history mr-2"></i>
-            Solicitudes de {{ $chofer->name ?? 'Chofer' }}
+            Solicitudes de {{ $choferData['name'] ?? 'Chofer' }}
         </h3>
         <div class="card-tools">
-            <span class="badge badge-secondary">{{ $solicitudes->count() }} registro(s)</span>
+            <span class="badge badge-secondary">{{ $lista->count() }} registro(s)</span>
         </div>
     </div>
     <div class="card-body p-0">
-        @if($solicitudes->isEmpty())
+        @if($lista->isEmpty())
             <div class="text-center py-5 text-muted">
                 <i class="fas fa-search fa-3x mb-3 d-block"></i>
                 No se encontraron solicitudes para este chofer en el período seleccionado.
@@ -149,31 +155,36 @@ $statusConfig = [
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach($solicitudes as $s)
-                    @php $cfg = $statusConfig[$s->status] ?? ['label' => $s->status, 'badge' => 'secondary']; @endphp
+                    @foreach($lista as $s)
+                    @php
+                        $sol = is_array($s) ? $s : $s->toArray();
+                        $cfg = $statusConfig[$sol['status']] ?? ['label' => $sol['status'], 'badge' => 'secondary'];
+                    @endphp
                     <tr>
-                        <td><small class="text-muted">#{{ $s->id }}</small></td>
+                        <td><small class="text-muted">#{{ $sol['id'] }}</small></td>
                         <td>
-                            <strong>{{ $s->plate }}</strong>
-                            <small class="d-block text-muted">{{ $s->brand }} {{ $s->model }}</small>
+                            <strong>{{ $sol['plate'] ?? '—' }}</strong>
+                            <small class="d-block text-muted">
+                                {{ ($sol['brand'] ?? '') . ' ' . ($sol['model'] ?? '') }}
+                            </small>
                         </td>
-                        <td>{{ $s->vehicle_type }}</td>
+                        <td>{{ $sol['vehicle_type'] ?? '—' }}</td>
                         <td>
-                            <small>{{ \Carbon\Carbon::parse($s->departure_date)->format('d/m/Y H:i') }}</small>
+                            <small>{{ \Carbon\Carbon::parse($sol['departure_date'])->format('d/m/Y H:i') }}</small>
                         </td>
                         <td>
-                            <small>{{ \Carbon\Carbon::parse($s->return_date)->format('d/m/Y H:i') }}</small>
+                            <small>{{ \Carbon\Carbon::parse($sol['return_date'])->format('d/m/Y H:i') }}</small>
                         </td>
                         <td>
                             <span class="badge badge-{{ $cfg['badge'] }}">{{ $cfg['label'] }}</span>
                         </td>
                         <td>
-                            @if($s->rejection_reason)
+                            @if(!empty($sol['rejection_reason']))
                                 <span class="text-danger small">
-                                    <i class="fas fa-times-circle mr-1"></i>{{ $s->rejection_reason }}
+                                    <i class="fas fa-times-circle mr-1"></i>{{ $sol['rejection_reason'] }}
                                 </span>
-                            @elseif($s->reason)
-                                <small class="text-muted">{{ Str::limit($s->reason, 50) }}</small>
+                            @elseif(!empty($sol['reason']))
+                                <small class="text-muted">{{ Str::limit($sol['reason'], 50) }}</small>
                             @else
                                 <span class="text-muted">—</span>
                             @endif

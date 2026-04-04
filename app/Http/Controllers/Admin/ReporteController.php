@@ -3,19 +3,18 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\User;
+use App\Http\Controllers\Concerns\ApiConsumer;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 
 class ReporteController extends Controller
 {
-    // ── GET /admin/reportes ───────────────────────────────────────────────────
+    use ApiConsumer;
+
     public function index()
     {
         return view('admin.reportes.index');
     }
 
-    // ── GET /admin/reportes/disponibilidad ────────────────────────────────────
     public function disponibilidad(Request $request)
     {
         $vehiculos = collect();
@@ -26,49 +25,23 @@ class ReporteController extends Controller
             $request->validate([
                 'start_date' => 'required|date',
                 'end_date'   => 'required|date|after_or_equal:start_date',
-            ], [
-                'end_date.after_or_equal' => 'La fecha fin debe ser igual o posterior al inicio.',
+            ], ['end_date.after_or_equal' => 'La fecha fin debe ser igual o posterior al inicio.']);
+
+            $response = $this->apiGet('reports/vehicle-availability', [
+                'start_date' => $startDate,
+                'end_date'   => $endDate,
             ]);
 
-            $vehiculos = DB::table('vehicles')
-                ->leftJoin('trip_requests', function ($join) use ($startDate, $endDate) {
-                    $join->on('vehicles.id', '=', 'trip_requests.vehicle_id')
-                        ->whereNull('trip_requests.deleted_at')
-                        ->where('trip_requests.status', 'approved')
-                        ->where(function ($q) use ($startDate, $endDate) {
-                            $q->whereBetween('trip_requests.departure_date', [$startDate, $endDate])
-                              ->orWhereBetween('trip_requests.return_date', [$startDate, $endDate])
-                              ->orWhere(function ($q2) use ($startDate, $endDate) {
-                                  $q2->where('trip_requests.departure_date', '<=', $startDate)
-                                     ->where('trip_requests.return_date', '>=', $endDate);
-                              });
-                        });
-                })
-                ->whereNull('vehicles.deleted_at')
-                ->select(
-                    'vehicles.id',
-                    'vehicles.plate',
-                    'vehicles.brand',
-                    'vehicles.model',
-                    'vehicles.year',
-                    'vehicles.vehicle_type',
-                    'vehicles.capacity',
-                    'vehicles.fuel_type',
-                    'vehicles.image_path',
-                    'vehicles.status',
-                    'trip_requests.id as trip_request_id',
-                    'trip_requests.departure_date',
-                    'trip_requests.return_date',
-                    'trip_requests.status as request_status'
-                )
-                ->orderBy('vehicles.plate')
-                ->get();
+            if ($response->successful()) {
+                $vehiculos = collect($response->json('data') ?? []);
+            } else {
+                return back()->with('error', 'Error al generar el reporte.');
+            }
         }
 
         return view('admin.reportes.disponibilidad', compact('vehiculos', 'startDate', 'endDate'));
     }
 
-    // ── GET /admin/reportes/uso-flotilla ──────────────────────────────────────
     public function usoFlotilla(Request $request)
     {
         $reporte   = collect();
@@ -79,39 +52,23 @@ class ReporteController extends Controller
             $request->validate([
                 'start_date' => 'required|date',
                 'end_date'   => 'required|date|after_or_equal:start_date',
-            ], [
-                'end_date.after_or_equal' => 'La fecha fin debe ser igual o posterior al inicio.',
+            ], ['end_date.after_or_equal' => 'La fecha fin debe ser igual o posterior al inicio.']);
+
+            $response = $this->apiGet('reports/fleet-usage', [
+                'start_date' => $startDate,
+                'end_date'   => $endDate,
             ]);
 
-            $reporte = DB::table('trips')
-                ->join('vehicles', 'trips.vehicle_id', '=', 'vehicles.id')
-                ->whereNull('trips.deleted_at')
-                ->whereNull('vehicles.deleted_at')
-                ->whereBetween('trips.start_time', [
-                    $startDate . ' 00:00:00',
-                    $endDate   . ' 23:59:59',
-                ])
-                ->select(
-                    'vehicles.id',
-                    'vehicles.plate',
-                    'vehicles.brand',
-                    'vehicles.model',
-                    'vehicles.vehicle_type',
-                    DB::raw('COUNT(trips.id) as total_viajes'),
-                    DB::raw('COALESCE(SUM(trips.end_mileage - trips.start_mileage), 0) as total_km')
-                )
-                ->groupBy(
-                    'vehicles.id', 'vehicles.plate',
-                    'vehicles.brand', 'vehicles.model', 'vehicles.vehicle_type'
-                )
-                ->orderByDesc('total_viajes')
-                ->get();
+            if ($response->successful()) {
+                $reporte = collect($response->json('data') ?? []);
+            } else {
+                return back()->with('error', 'Error al generar el reporte.');
+            }
         }
 
         return view('admin.reportes.uso-flotilla', compact('reporte', 'startDate', 'endDate'));
     }
 
-    // ── GET /admin/reportes/historial-chofer ──────────────────────────────────
     public function historialChofer(Request $request)
     {
         $solicitudes = collect();
@@ -120,14 +77,15 @@ class ReporteController extends Controller
         $driverId    = $request->driver_id;
         $chofer      = null;
 
-        // Lista de choferes para el select
-        $choferes = User::whereHas('role', fn($q) => $q->where('name', 'Chofer'))
-            ->orderBy('name')
-            ->get();
+        // Cargar lista de choferes
+        $rUsers   = $this->apiGet('users', ['per_page' => 999]);
+        $choferes = collect($rUsers->json('data.data') ?? [])
+            ->filter(fn($u) => ($u['role']['name'] ?? '') === 'Chofer')
+            ->values();
 
         if ($request->filled('driver_id') && $request->filled('start_date') && $request->filled('end_date')) {
             $request->validate([
-                'driver_id'  => 'required|exists:users,id',
+                'driver_id'  => 'required',
                 'start_date' => 'required|date',
                 'end_date'   => 'required|date|after_or_equal:start_date',
             ], [
@@ -135,36 +93,22 @@ class ReporteController extends Controller
                 'end_date.after_or_equal' => 'La fecha fin debe ser igual o posterior al inicio.',
             ]);
 
-            $chofer = User::find($driverId);
+            $chofer   = $choferes->firstWhere('id', (int) $driverId);
+            $response = $this->apiGet('reports/driver-history', [
+                'driver_id'  => $driverId,
+                'start_date' => $startDate,
+                'end_date'   => $endDate,
+            ]);
 
-            $solicitudes = DB::table('trip_requests')
-                ->join('vehicles', 'trip_requests.vehicle_id', '=', 'vehicles.id')
-                ->whereNull('trip_requests.deleted_at')
-                ->whereNull('vehicles.deleted_at')
-                ->where('trip_requests.user_id', $driverId)
-                ->where(function ($q) use ($startDate, $endDate) {
-                    $q->whereBetween('trip_requests.departure_date', [$startDate, $endDate])
-                      ->orWhereBetween('trip_requests.return_date', [$startDate, $endDate]);
-                })
-                ->select(
-                    'trip_requests.id',
-                    'trip_requests.departure_date',
-                    'trip_requests.return_date',
-                    'trip_requests.status',
-                    'trip_requests.reason',
-                    'trip_requests.rejection_reason',
-                    'vehicles.plate',
-                    'vehicles.brand',
-                    'vehicles.model',
-                    'vehicles.vehicle_type'
-                )
-                ->orderBy('trip_requests.departure_date')
-                ->get();
+            if ($response->successful()) {
+                $solicitudes = collect($response->json('data') ?? []);
+            } else {
+                return back()->with('error', 'Error al generar el reporte.');
+            }
         }
 
         return view('admin.reportes.historial-chofer', compact(
-            'solicitudes', 'chofer', 'choferes',
-            'startDate', 'endDate', 'driverId'
+            'solicitudes', 'chofer', 'choferes', 'startDate', 'endDate', 'driverId'
         ));
     }
 }

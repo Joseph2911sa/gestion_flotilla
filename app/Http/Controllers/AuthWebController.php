@@ -8,12 +8,8 @@ use Illuminate\Support\Facades\Http;
 
 class AuthWebController extends Controller
 {
-    private string $apiBase;
-
-    public function __construct()
-    {
-        $this->apiBase = config('app.url') . '/api/v1';
-    }
+    // API siempre en puerto 8000
+    private string $apiBase = 'http://127.0.0.1:8000/api/v1';
 
     public function showLogin()
     {
@@ -62,9 +58,11 @@ class AuthWebController extends Controller
 
     public function logout(Request $request)
     {
+        // Llamar al API en puerto 8000 para invalidar el token
         Http::withToken(session('api_token'))
             ->post("{$this->apiBase}/logout");
 
+        Auth::logout();
         session()->flush();
 
         return redirect()->route('login')

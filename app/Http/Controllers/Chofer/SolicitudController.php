@@ -3,64 +3,45 @@
 namespace App\Http\Controllers\Chofer;
 
 use App\Http\Controllers\Controller;
-use App\Models\TripRequest;
-use App\Models\Vehicle;
+use App\Http\Controllers\Concerns\ApiConsumer;
 use Illuminate\Http\Request;
 
 class SolicitudController extends Controller
 {
+    use ApiConsumer;
+
     public function index()
     {
-        // Vehículos disponibles para el selector
-        $vehiculos = Vehicle::where('status', 'available')->get();
+        $response  = $this->apiGet('vehicles', ['status' => 'available', 'per_page' => 999]);
+        $vehiculos = collect($response->json('data.data') ?? []);
 
         return view('chofer.solicitudes.index', compact('vehiculos'));
     }
 
     public function store(Request $request)
     {
-        // Validaciones frontend
         $request->validate([
-            'vehicle_id'     => 'required|exists:vehicles,id',
+            'vehicle_id'     => 'required',
             'departure_date' => 'required|date',
             'return_date'    => 'required|date|after:departure_date',
             'reason'         => 'nullable|string|max:500',
         ], [
             'vehicle_id.required'     => 'Debe seleccionar un vehículo.',
-            'vehicle_id.exists'       => 'El vehículo seleccionado no es válido.',
             'departure_date.required' => 'La fecha de inicio es obligatoria.',
             'return_date.required'    => 'La fecha de fin es obligatoria.',
-            'return_date.after'       => 'La fecha de fin debe ser mayor a la fecha de inicio.',
+            'return_date.after'       => 'La fecha de fin debe ser mayor a la de inicio.',
         ]);
 
-        // Verificar que el vehículo no tenga solicitudes aprobadas que se traslapen
-        $traslape = TripRequest::where('vehicle_id', $request->vehicle_id)
-            ->where('status', 'approved')
-            ->where(function ($q) use ($request) {
-                $q->whereBetween('departure_date', [$request->departure_date, $request->return_date])
-                  ->orWhereBetween('return_date', [$request->departure_date, $request->return_date])
-                  ->orWhere(function ($q2) use ($request) {
-                      $q2->where('departure_date', '<=', $request->departure_date)
-                         ->where('return_date', '>=', $request->return_date);
-                  });
-            })->exists();
-
-        if ($traslape) {
-            return back()
-                ->withInput()
-                ->with('error', 'El vehículo ya tiene una asignación aprobada en ese rango de fechas.');
-        }
-
-        // Crear la solicitud
-        TripRequest::create([
-            'user_id'        => session('user')['id'],
-            'vehicle_id'     => $request->vehicle_id,
-            'route_id'       => $request->route_id, 
+        $response = $this->apiPost('trip-requests', [
+            'vehicle_id'     => (int) $request->vehicle_id,
             'departure_date' => $request->departure_date,
             'return_date'    => $request->return_date,
             'reason'         => $request->reason,
-            'status'         => 'pending',
         ]);
+
+        if ($response->failed()) {
+            return $this->handleError($response, 'Error al crear la solicitud.');
+        }
 
         return redirect()->route('chofer.historial')
             ->with('success', 'Solicitud creada correctamente. Estado: Pendiente de aprobación.');

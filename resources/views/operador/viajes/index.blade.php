@@ -7,7 +7,8 @@
 
 {{-- Botón registrar salida --}}
 <div class="d-flex justify-content-end mb-3">
-    <button type="button" class="btn btn-primary btn-sm" data-toggle="modal" data-target="#modalSalida">
+    <button type="button" class="btn btn-primary btn-sm"
+            data-toggle="modal" data-target="#modalSalida">
         <i class="fas fa-car mr-1"></i>Registrar Salida
     </button>
 </div>
@@ -18,9 +19,16 @@
         <h3 class="card-title">
             <i class="fas fa-road mr-2"></i>Historial de Viajes
         </h3>
+        <div class="card-tools">
+            <span class="badge badge-secondary">
+                {{ isset($paginado['total']) ? $paginado['total'] : count($viajes) }} viaje(s)
+            </span>
+        </div>
     </div>
     <div class="card-body p-0">
-        @if($viajes->isEmpty())
+        @php $lista = collect($viajes); @endphp
+
+        @if($lista->isEmpty())
             <div class="text-center py-5 text-muted">
                 <i class="fas fa-road fa-3x mb-3 d-block"></i>
                 No hay viajes registrados aún.
@@ -44,49 +52,52 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach($viajes as $viaje)
+                    @foreach($lista as $viaje)
+                    @php
+                        $vj         = is_array($viaje) ? $viaje : $viaje->toArray();
+                        $completado = !empty($vj['end_time']) && !empty($vj['end_mileage']);
+                        $kmRec      = ($completado && isset($vj['start_mileage'], $vj['end_mileage']))
+                                        ? ($vj['end_mileage'] - $vj['start_mileage'])
+                                        : null;
+                    @endphp
                     <tr>
-                        <td><small class="text-muted">#{{ $viaje->id }}</small></td>
+                        <td><small class="text-muted">#{{ $vj['id'] }}</small></td>
                         <td>
-                            {{ $viaje->driver->name ?? '—' }}
-                            <br>
-                            <small class="text-muted">{{ $viaje->driver->email ?? '' }}</small>
+                            {{ $vj['driver']['name'] ?? '—' }}
+                            <small class="d-block text-muted">{{ $vj['driver']['email'] ?? '' }}</small>
                         </td>
                         <td>
-                            <strong>{{ $viaje->vehicle->plate ?? '—' }}</strong>
-                            <br>
-                            <small class="text-muted">
-                                {{ $viaje->vehicle->brand ?? '' }} {{ $viaje->vehicle->model ?? '' }}
+                            <strong>{{ $vj['vehicle']['plate'] ?? '—' }}</strong>
+                            <small class="d-block text-muted">
+                                {{ ($vj['vehicle']['brand'] ?? '') . ' ' . ($vj['vehicle']['model'] ?? '') }}
                             </small>
                         </td>
-                        <td>{{ $viaje->route->name ?? '—' }}</td>
+                        <td>{{ $vj['route']['name'] ?? '—' }}</td>
                         <td>
                             <small>
-                                {{ $viaje->start_time
-                                    ? \Carbon\Carbon::parse($viaje->start_time)->format('d/m/Y H:i')
+                                {{ !empty($vj['start_time'])
+                                    ? \Carbon\Carbon::parse($vj['start_time'])->format('d/m/Y H:i')
                                     : '—' }}
                             </small>
                         </td>
                         <td>
                             <small>
-                                {{ $viaje->end_time
-                                    ? \Carbon\Carbon::parse($viaje->end_time)->format('d/m/Y H:i')
+                                {{ !empty($vj['end_time'])
+                                    ? \Carbon\Carbon::parse($vj['end_time'])->format('d/m/Y H:i')
                                     : '—' }}
                             </small>
                         </td>
-                        <td>{{ number_format($viaje->start_mileage) }} km</td>
-                        <td>{{ $viaje->end_mileage ? number_format($viaje->end_mileage) . ' km' : '—' }}</td>
+                        <td>{{ isset($vj['start_mileage']) ? number_format($vj['start_mileage']) . ' km' : '—' }}</td>
+                        <td>{{ isset($vj['end_mileage']) ? number_format($vj['end_mileage']) . ' km' : '—' }}</td>
                         <td>
-                            @if($viaje->end_mileage && $viaje->start_mileage)
-                                <span class="badge badge-info">
-                                    {{ number_format($viaje->end_mileage - $viaje->start_mileage) }} km
-                                </span>
+                            @if($kmRec !== null)
+                                <span class="badge badge-info">{{ number_format($kmRec) }} km</span>
                             @else
                                 <span class="text-muted">—</span>
                             @endif
                         </td>
                         <td>
-                            @if($viaje->isCompleted())
+                            @if($completado)
                                 <span class="badge badge-success">
                                     <i class="fas fa-flag-checkered mr-1"></i>Completado
                                 </span>
@@ -97,19 +108,18 @@
                             @endif
                         </td>
                         <td>
-                            @if(!$viaje->isCompleted())
+                            @if(!$completado)
                                 <button type="button"
                                         class="btn btn-success btn-sm btn-retorno"
-                                        data-id="{{ $viaje->id }}"
-                                        data-chofer="{{ $viaje->driver->name ?? '' }}"
-                                        data-vehiculo="{{ $viaje->vehicle->plate ?? '' }}"
-                                        data-km="{{ $viaje->start_mileage }}"
-                                        data-toggle="modal"
-                                        data-target="#modalRetorno">
+                                        data-id="{{ $vj['id'] }}"
+                                        data-chofer="{{ $vj['driver']['name'] ?? '' }}"
+                                        data-vehiculo="{{ $vj['vehicle']['plate'] ?? '' }}"
+                                        data-km="{{ $vj['start_mileage'] ?? 0 }}"
+                                        title="Registrar retorno">
                                     <i class="fas fa-flag-checkered mr-1"></i>Retorno
                                 </button>
                             @else
-                                <span class="text-muted">—</span>
+                                <span class="text-muted small">—</span>
                             @endif
                         </td>
                     </tr>
@@ -117,14 +127,34 @@
                 </tbody>
             </table>
         </div>
-        <div class="card-footer">
-            {{ $viajes->links() }}
+
+        {{-- Paginación --}}
+        @if(isset($paginado['last_page']) && $paginado['last_page'] > 1)
+        <div class="card-footer clearfix">
+            <ul class="pagination pagination-sm m-0 float-right">
+                @if($paginado['current_page'] > 1)
+                    <li class="page-item">
+                        <a class="page-link" href="{{ route('operador.viajes') }}?page={{ $paginado['current_page']-1 }}">«</a>
+                    </li>
+                @endif
+                @for($p = 1; $p <= $paginado['last_page']; $p++)
+                    <li class="page-item {{ $p === $paginado['current_page'] ? 'active' : '' }}">
+                        <a class="page-link" href="{{ route('operador.viajes') }}?page={{ $p }}">{{ $p }}</a>
+                    </li>
+                @endfor
+                @if($paginado['current_page'] < $paginado['last_page'])
+                    <li class="page-item">
+                        <a class="page-link" href="{{ route('operador.viajes') }}?page={{ $paginado['current_page']+1 }}">»</a>
+                    </li>
+                @endif
+            </ul>
         </div>
+        @endif
         @endif
     </div>
 </div>
 
-{{-- ── MODAL: Registrar Salida ──────────────────────────────────────────────── --}}
+{{-- ── MODAL: Registrar Salida ─────────────────────────────────────────────── --}}
 <div class="modal fade" id="modalSalida" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
@@ -137,25 +167,28 @@
             <form action="{{ route('operador.viajes.store') }}" method="POST">
                 @csrf
                 <div class="modal-body">
+                    @php $solicitudesLista = collect($solicitudesAprobadas ?? []); @endphp
 
-                    @if($solicitudesAprobadas->isEmpty())
-                        <div class="alert alert-warning">
+                    @if($solicitudesLista->isEmpty())
+                        <div class="alert alert-warning mb-0">
                             <i class="fas fa-exclamation-triangle mr-2"></i>
                             No hay solicitudes aprobadas pendientes de salida.
                         </div>
                     @else
-
                     <div class="form-group">
                         <label>Solicitud Aprobada <span class="text-danger">*</span></label>
                         <select name="trip_request_id"
                                 class="form-control @error('trip_request_id') is-invalid @enderror">
                             <option value="">-- Seleccione una solicitud --</option>
-                            @foreach($solicitudesAprobadas as $sol)
-                                <option value="{{ $sol->id }}" {{ old('trip_request_id') == $sol->id ? 'selected' : '' }}>
-                                    #{{ $sol->id }} — {{ $sol->user->name ?? '?' }}
-                                    | {{ $sol->vehicle->plate ?? '?' }}
-                                    {{ $sol->vehicle->brand ?? '' }} {{ $sol->vehicle->model ?? '' }}
-                                    | {{ \Carbon\Carbon::parse($sol->departure_date)->format('d/m/Y H:i') }}
+                            @foreach($solicitudesLista as $sol)
+                            @php $s = is_array($sol) ? $sol : $sol->toArray(); @endphp
+                                <option value="{{ $s['id'] }}" {{ old('trip_request_id') == $s['id'] ? 'selected' : '' }}>
+                                    #{{ $s['id'] }} —
+                                    {{ $s['user']['name'] ?? '?' }} |
+                                    {{ $s['vehicle']['plate'] ?? '?' }}
+                                    {{ $s['vehicle']['brand'] ?? '' }}
+                                    {{ $s['vehicle']['model'] ?? '' }} |
+                                    {{ !empty($s['departure_date']) ? \Carbon\Carbon::parse($s['departure_date'])->format('d/m/Y H:i') : '' }}
                                 </option>
                             @endforeach
                         </select>
@@ -168,8 +201,7 @@
                         <div class="col-md-6">
                             <div class="form-group">
                                 <label>Fecha/Hora de Salida <span class="text-danger">*</span></label>
-                                <input type="datetime-local"
-                                       name="start_time"
+                                <input type="datetime-local" name="start_time"
                                        class="form-control @error('start_time') is-invalid @enderror"
                                        value="{{ old('start_time', now()->format('Y-m-d\TH:i')) }}">
                                 @error('start_time')
@@ -181,11 +213,9 @@
                             <div class="form-group">
                                 <label>Kilometraje Inicial <span class="text-danger">*</span></label>
                                 <div class="input-group">
-                                    <input type="number"
-                                           name="start_mileage"
+                                    <input type="number" name="start_mileage"
                                            class="form-control @error('start_mileage') is-invalid @enderror"
-                                           placeholder="Ej: 45000"
-                                           min="0"
+                                           placeholder="Ej: 45000" min="0"
                                            value="{{ old('start_mileage') }}">
                                     <div class="input-group-append">
                                         <span class="input-group-text">km</span>
@@ -198,17 +228,16 @@
                         </div>
                     </div>
 
-                    <div class="form-group">
-                        <label>Observaciones <span class="text-muted">(opcional)</span></label>
+                    <div class="form-group mb-0">
+                        <label>Observaciones <small class="text-muted">(opcional)</small></label>
                         <textarea name="observations" rows="2" class="form-control"
                                   placeholder="Notas adicionales...">{{ old('observations') }}</textarea>
                     </div>
-
                     @endif
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-dismiss="modal">Cancelar</button>
-                    @if(!$solicitudesAprobadas->isEmpty())
+                    @if(!($solicitudesLista ?? collect())->isEmpty())
                     <button type="submit" class="btn btn-primary">
                         <i class="fas fa-car mr-1"></i>Registrar Salida
                     </button>
@@ -219,7 +248,7 @@
     </div>
 </div>
 
-{{-- ── MODAL: Registrar Retorno ─────────────────────────────────────────────── --}}
+{{-- ── MODAL: Registrar Retorno ────────────────────────────────────────────── --}}
 <div class="modal fade" id="modalRetorno" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -233,20 +262,17 @@
                 @csrf
                 @method('PATCH')
                 <div class="modal-body">
-                    <p>
-                        Chofer: <strong id="retornoChofer"></strong> |
-                        Vehículo: <strong id="retornoVehiculo"></strong>
-                    </p>
-                    <p>
+                    <div class="callout callout-success py-2 px-3 mb-3 small">
+                        Chofer: <strong id="retornoChofer"></strong> &nbsp;|&nbsp;
+                        Vehículo: <strong id="retornoVehiculo"></strong> &nbsp;|&nbsp;
                         Km inicial: <strong id="retornoKmInicial"></strong> km
-                    </p>
+                    </div>
 
                     <div class="row">
                         <div class="col-md-6">
                             <div class="form-group">
                                 <label>Fecha/Hora de Retorno <span class="text-danger">*</span></label>
-                                <input type="datetime-local"
-                                       name="end_time"
+                                <input type="datetime-local" name="end_time"
                                        class="form-control"
                                        value="{{ now()->format('Y-m-d\TH:i') }}">
                             </div>
@@ -255,12 +281,8 @@
                             <div class="form-group">
                                 <label>Kilometraje Final <span class="text-danger">*</span></label>
                                 <div class="input-group">
-                                    <input type="number"
-                                           name="end_mileage"
-                                           id="end_mileage"
-                                           class="form-control"
-                                           placeholder="Ej: 45300"
-                                           min="0">
+                                    <input type="number" name="end_mileage" id="end_mileage"
+                                           class="form-control" placeholder="Ej: 45300" min="0">
                                     <div class="input-group-append">
                                         <span class="input-group-text">km</span>
                                     </div>
@@ -269,8 +291,8 @@
                         </div>
                     </div>
 
-                    <div class="form-group">
-                        <label>Observaciones <span class="text-muted">(opcional)</span></label>
+                    <div class="form-group mb-0">
+                        <label>Observaciones <small class="text-muted">(opcional)</small></label>
                         <textarea name="observations" rows="2" class="form-control"
                                   placeholder="Notas del retorno..."></textarea>
                     </div>
@@ -291,7 +313,7 @@
 @push('scripts')
 <script>
 $(function () {
-    // Abrir modal de salida si hay errores de validación
+    // Abrir modal salida si hay errores
     @if($errors->any() && old('trip_request_id'))
         $('#modalSalida').modal('show');
     @endif
@@ -306,8 +328,9 @@ $(function () {
         $('#retornoChofer').text(chofer);
         $('#retornoVehiculo').text(vehiculo);
         $('#retornoKmInicial').text(km);
-        $('#end_mileage').attr('min', km);
+        $('#end_mileage').attr('min', parseInt(km) + 1).val('');
         $('#formRetorno').attr('action', '/operador/viajes/' + id + '/retorno');
+        $('#modalRetorno').modal('show');
     });
 });
 </script>

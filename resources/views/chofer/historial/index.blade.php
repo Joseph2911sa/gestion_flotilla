@@ -5,13 +5,13 @@
 
 @section('content')
 
-@if($solicitudes->isEmpty())
+@php $lista = collect($solicitudes); @endphp
+
+@if($lista->isEmpty())
     <div class="alert alert-info">
         <i class="fas fa-info-circle mr-2"></i>
         No tienes solicitudes registradas aún.
-        <a href="{{ route('chofer.solicitudes') }}" class="alert-link ml-2">
-            Crear una solicitud
-        </a>
+        <a href="{{ route('chofer.solicitudes') }}" class="alert-link ml-2">Crear una solicitud</a>
     </div>
 @else
     <div class="card card-outline card-primary">
@@ -41,70 +41,50 @@
                         </tr>
                     </thead>
                     <tbody>
-                        @foreach($solicitudes as $solicitud)
+                        @foreach($lista as $solicitud)
+                        @php $s = is_array($solicitud) ? $solicitud : $solicitud->toArray(); @endphp
                         <tr>
-                            <td>{{ $solicitud->id }}</td>
+                            <td>{{ $s['id'] }}</td>
                             <td>
-                                @if($solicitud->vehicle)
+                                @if(!empty($s['vehicle']))
                                     <i class="fas fa-car mr-1 text-primary"></i>
-                                    {{ $solicitud->vehicle->brand }}
-                                    {{ $solicitud->vehicle->model }}
+                                    {{ $s['vehicle']['brand'] }} {{ $s['vehicle']['model'] }}
                                     <br>
-                                    <small class="text-muted">{{ $solicitud->vehicle->plate }}</small>
+                                    <small class="text-muted">{{ $s['vehicle']['plate'] }}</small>
                                 @else
                                     <span class="text-muted">—</span>
                                 @endif
                             </td>
                             <td>
-                                <i class="fas fa-calendar mr-1 text-success"></i>
-                                {{ \Carbon\Carbon::parse($solicitud->departure_date)->format('d/m/Y H:i') }}
+                                <small>{{ \Carbon\Carbon::parse($s['departure_date'])->format('d/m/Y H:i') }}</small>
                             </td>
                             <td>
-                                <i class="fas fa-calendar-check mr-1 text-danger"></i>
-                                {{ \Carbon\Carbon::parse($solicitud->return_date)->format('d/m/Y H:i') }}
+                                <small>{{ \Carbon\Carbon::parse($s['return_date'])->format('d/m/Y H:i') }}</small>
+                            </td>
+                            <td><small>{{ $s['reason'] ?? '—' }}</small></td>
+                            <td>
+                                {{ $s['reviewer']['name'] ?? '—' }}
                             </td>
                             <td>
-                                {{ $solicitud->reason ?? '—' }}
+                                @php
+                                    $badges = [
+                                        'pending'   => ['warning',   'clock',            'Pendiente'],
+                                        'approved'  => ['success',   'check',            'Aprobada'],
+                                        'rejected'  => ['danger',    'times',            'Rechazada'],
+                                        'cancelled' => ['secondary', 'ban',              'Cancelada'],
+                                        'completed' => ['info',      'flag-checkered',   'Completada'],
+                                    ];
+                                    $b = $badges[$s['status']] ?? ['light', 'question', $s['status']];
+                                @endphp
+                                <span class="badge badge-{{ $b[0] }}">
+                                    <i class="fas fa-{{ $b[1] }} mr-1"></i>{{ $b[2] }}
+                                </span>
                             </td>
                             <td>
-                                {{ $solicitud->reviewer->name ?? '—' }}
-                            </td>
-                            <td>
-                                @switch($solicitud->status)
-                                    @case('pending')
-                                        <span class="badge badge-warning">
-                                            <i class="fas fa-clock mr-1"></i>Pendiente
-                                        </span>
-                                        @break
-                                    @case('approved')
-                                        <span class="badge badge-success">
-                                            <i class="fas fa-check mr-1"></i>Aprobada
-                                        </span>
-                                        @break
-                                    @case('rejected')
-                                        <span class="badge badge-danger">
-                                            <i class="fas fa-times mr-1"></i>Rechazada
-                                        </span>
-                                        @break
-                                    @case('cancelled')
-                                        <span class="badge badge-secondary">
-                                            <i class="fas fa-ban mr-1"></i>Cancelada
-                                        </span>
-                                        @break
-                                    @case('completed')
-                                        <span class="badge badge-info">
-                                            <i class="fas fa-flag-checkered mr-1"></i>Completada
-                                        </span>
-                                        @break
-                                    @default
-                                        <span class="badge badge-light">{{ $solicitud->status }}</span>
-                                @endswitch
-                            </td>
-                            <td>
-                                @if(in_array($solicitud->status, ['pending', 'approved']))
-                                    <form action="{{ route('chofer.historial.cancelar', $solicitud->id) }}"
+                                @if(in_array($s['status'], ['pending', 'approved']))
+                                    <form action="{{ route('chofer.historial.cancelar', $s['id']) }}"
                                           method="POST"
-                                          onsubmit="return confirm('¿Estás seguro de cancelar esta solicitud?')">
+                                          onsubmit="return confirm('¿Cancelar esta solicitud?')">
                                         @csrf
                                         <button type="submit" class="btn btn-danger btn-sm">
                                             <i class="fas fa-ban mr-1"></i>Cancelar
@@ -120,9 +100,29 @@
                 </table>
             </div>
         </div>
-        <div class="card-footer">
-            {{ $solicitudes->links() }}
+
+        {{-- Paginación manual --}}
+        @if(isset($paginado) && !empty($paginado['last_page']) && $paginado['last_page'] > 1)
+        <div class="card-footer clearfix">
+            <ul class="pagination pagination-sm m-0 float-right">
+                @if($paginado['current_page'] > 1)
+                    <li class="page-item">
+                        <a class="page-link" href="{{ route('chofer.historial') }}?page={{ $paginado['current_page']-1 }}">«</a>
+                    </li>
+                @endif
+                @for($p = 1; $p <= $paginado['last_page']; $p++)
+                    <li class="page-item {{ $p === $paginado['current_page'] ? 'active' : '' }}">
+                        <a class="page-link" href="{{ route('chofer.historial') }}?page={{ $p }}">{{ $p }}</a>
+                    </li>
+                @endfor
+                @if($paginado['current_page'] < $paginado['last_page'])
+                    <li class="page-item">
+                        <a class="page-link" href="{{ route('chofer.historial') }}?page={{ $paginado['current_page']+1 }}">»</a>
+                    </li>
+                @endif
+            </ul>
         </div>
+        @endif
     </div>
 @endif
 
