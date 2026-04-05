@@ -7,10 +7,10 @@
 
 @php
 $statusLabels = [
-    'available'      => ['label' => 'Disponible',       'badge' => 'success'],
-    'in_use'         => ['label' => 'En uso',            'badge' => 'primary'],
-    'maintenance'    => ['label' => 'Mantenimiento',     'badge' => 'warning'],
-    'out_of_service' => ['label' => 'Fuera de servicio', 'badge' => 'danger'],
+    'available'      => ['label' => 'Disponible',        'badge' => 'success'],
+    'in_use'         => ['label' => 'En uso',             'badge' => 'primary'],
+    'maintenance'    => ['label' => 'Mantenimiento',      'badge' => 'warning'],
+    'out_of_service' => ['label' => 'Fuera de servicio',  'badge' => 'danger'],
 ];
 @endphp
 
@@ -71,7 +71,9 @@ $statusLabels = [
         </div>
     </div>
     <div class="card-body p-0">
-        @if($vehiculos->isEmpty())
+        @php $lista = collect($vehiculos); @endphp
+
+        @if($lista->isEmpty())
             <div class="text-center py-5 text-muted">
                 <i class="fas fa-search fa-3x mb-3 d-block"></i>
                 No se encontraron vehículos para ese rango de fechas.
@@ -92,16 +94,18 @@ $statusLabels = [
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach($vehiculos as $v)
+                    @foreach($lista as $vehiculo)
                     @php
-                        $info       = $statusLabels[$v->status] ?? ['label' => $v->status, 'badge' => 'secondary'];
-                        $ocupado    = !is_null($v->trip_request_id);
-                        $imgUrl     = $v->image_path ? asset('storage/' . $v->image_path) : null;
+                        // El API devuelve arrays, no objetos
+                        $v      = is_array($vehiculo) ? $vehiculo : $vehiculo->toArray();
+                        $info   = $statusLabels[$v['status'] ?? ''] ?? ['label' => $v['status'] ?? '—', 'badge' => 'secondary'];
+                        $ocupado = !empty($v['trip_request_id']);
+                        $imgUrl  = !empty($v['image_path']) ? asset('storage/' . $v['image_path']) : null;
                     @endphp
                     <tr>
                         <td>
                             @if($imgUrl)
-                                <img src="{{ $imgUrl }}" alt="{{ $v->plate }}"
+                                <img src="{{ $imgUrl }}" alt="{{ $v['plate'] }}"
                                      style="width:55px;height:40px;object-fit:cover;border-radius:4px;border:1px solid #dee2e6">
                             @else
                                 <div style="width:55px;height:40px;background:#f4f6f9;border-radius:4px;
@@ -110,14 +114,14 @@ $statusLabels = [
                                 </div>
                             @endif
                         </td>
-                        <td><strong>{{ $v->plate }}</strong></td>
+                        <td><strong>{{ $v['plate'] }}</strong></td>
                         <td>
-                            {{ $v->brand }} {{ $v->model }}
-                            <small class="d-block text-muted">{{ $v->year }}</small>
+                            {{ $v['brand'] }} {{ $v['model'] }}
+                            <small class="d-block text-muted">{{ $v['year'] }}</small>
                         </td>
-                        <td>{{ $v->vehicle_type }}</td>
-                        <td>{{ $v->capacity }} <small class="text-muted">pers.</small></td>
-                        <td>{{ $v->fuel_type }}</td>
+                        <td>{{ $v['vehicle_type'] }}</td>
+                        <td>{{ $v['capacity'] }} <small class="text-muted">pers.</small></td>
+                        <td>{{ $v['fuel_type'] }}</td>
                         <td>
                             <span class="badge badge-{{ $info['badge'] }}">{{ $info['label'] }}</span>
                         </td>
@@ -126,11 +130,13 @@ $statusLabels = [
                                 <span class="badge badge-danger">
                                     <i class="fas fa-times mr-1"></i>Ocupado en rango
                                 </span>
+                                @if(!empty($v['departure_date']) && !empty($v['return_date']))
                                 <small class="d-block text-muted mt-1">
-                                    {{ \Carbon\Carbon::parse($v->departure_date)->format('d/m/Y H:i') }}
+                                    {{ \Carbon\Carbon::parse($v['departure_date'])->format('d/m/Y H:i') }}
                                     →
-                                    {{ \Carbon\Carbon::parse($v->return_date)->format('d/m/Y H:i') }}
+                                    {{ \Carbon\Carbon::parse($v['return_date'])->format('d/m/Y H:i') }}
                                 </small>
+                                @endif
                             @else
                                 <span class="badge badge-success">
                                     <i class="fas fa-check mr-1"></i>Disponible en rango
