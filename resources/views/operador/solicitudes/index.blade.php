@@ -108,14 +108,14 @@ $statusConfig = [
                         <td>
                             <small>
                                 {{ !empty($s['departure_date'])
-                                    ? \Carbon\Carbon::parse($s['departure_date'])->format('d/m/Y H:i')
+                                    ? \Carbon\Carbon::parse($s['departure_date'])->subHours(6)->format('d/m/Y H:i')
                                     : '—' }}
                             </small>
                         </td>
                         <td>
                             <small>
                                 {{ !empty($s['return_date'])
-                                    ? \Carbon\Carbon::parse($s['return_date'])->format('d/m/Y H:i')
+                                    ? \Carbon\Carbon::parse($s['return_date'])->subHours(6)->format('d/m/Y H:i')
                                     : '—' }}
                             </small>
                         </td>

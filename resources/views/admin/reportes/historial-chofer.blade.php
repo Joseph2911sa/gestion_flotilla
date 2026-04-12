@@ -170,10 +170,10 @@ $statusConfig = [
                         </td>
                         <td>{{ $sol['vehicle_type'] ?? '—' }}</td>
                         <td>
-                            <small>{{ \Carbon\Carbon::parse($sol['departure_date'])->format('d/m/Y H:i') }}</small>
+                            <small>{{ \Carbon\Carbon::parse($sol['departure_date'])->subHours(6)->format('d/m/Y H:i') }}</small>
                         </td>
                         <td>
-                            <small>{{ \Carbon\Carbon::parse($sol['return_date'])->format('d/m/Y H:i') }}</small>
+                            <small>{{ \Carbon\Carbon::parse($sol['return_date'])->subHours(6)->format('d/m/Y H:i') }}</small>
                         </td>
                         <td>
                             <span class="badge badge-{{ $cfg['badge'] }}">{{ $cfg['label'] }}</span>

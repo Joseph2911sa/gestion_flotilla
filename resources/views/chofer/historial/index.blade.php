@@ -56,10 +56,10 @@
                                 @endif
                             </td>
                             <td>
-                                <small>{{ \Carbon\Carbon::parse($s['departure_date'])->format('d/m/Y H:i') }}</small>
+                                <small>{{ \Carbon\Carbon::parse($s['departure_date'])->subHours(6)->format('d/m/Y H:i') }}</small>
                             </td>
                             <td>
-                                <small>{{ \Carbon\Carbon::parse($s['return_date'])->format('d/m/Y H:i') }}</small>
+                                <small>{{ \Carbon\Carbon::parse($s['return_date'])->subHours(6)->format('d/m/Y H:i') }}</small>
                             </td>
                             <td><small>{{ $s['reason'] ?? '—' }}</small></td>
                             <td>

@@ -266,7 +266,7 @@
                         <td>
                             <small>
                                 {{ isset($vehiculo['created_at'])
-                                    ? \Carbon\Carbon::parse($vehiculo['created_at'])->format('d/m/Y H:i')
+                                    ? \Carbon\Carbon::parse($vehiculo['created_at'])->subHours(6)->format('d/m/Y H:i')
                                     : '—' }}
                             </small>
                         </td>
@@ -276,7 +276,7 @@
                         <td>
                             <small>
                                 {{ isset($vehiculo['updated_at'])
-                                    ? \Carbon\Carbon::parse($vehiculo['updated_at'])->format('d/m/Y H:i')
+                                    ? \Carbon\Carbon::parse($vehiculo['updated_at'])->subHours(6)->format('d/m/Y H:i')
                                     : '—' }}
                             </small>
                         </td>

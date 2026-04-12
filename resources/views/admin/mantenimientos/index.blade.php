@@ -95,14 +95,14 @@ $tipoLabels = [
                         <td>
                             <small>
                                 {{ $m['start_date']
-                                    ? \Carbon\Carbon::parse($m['start_date'])->format('d/m/Y')
+                                    ? \Carbon\Carbon::parse($m['start_date'])->subHours(6)->format('d/m/Y H:i')
                                     : '—' }}
                             </small>
                         </td>
                         <td>
                             <small>
                                 {{ $m['end_date']
-                                    ? \Carbon\Carbon::parse($m['end_date'])->format('d/m/Y')
+                                    ? \Carbon\Carbon::parse($m['end_date'])->subHours(6)->format('d/m/Y H:i')
                                     : '—' }}
                             </small>
                         </td>
@@ -218,9 +218,9 @@ $tipoLabels = [
                         <div class="col-md-6">
                             <div class="form-group">
                                 <label>Fecha inicio <span class="text-danger">*</span></label>
-                                <input type="date" name="start_date"
+                                <input type="datetime-local" name="start_date"
                                        class="form-control @error('start_date') is-invalid @enderror"
-                                       value="{{ old('start_date', date('Y-m-d')) }}">
+                                       value="{{ old('start_date', date('Y-m-d\TH:i')) }}">
                                 @error('start_date')<div class="invalid-feedback">{{ $message }}</div>@enderror
                             </div>
                         </div>
@@ -279,8 +279,8 @@ $tipoLabels = [
                     </div>
                     <div class="form-group">
                         <label>Fecha de cierre</label>
-                        <input type="date" name="end_date" id="end_date_cerrar"
-                               class="form-control" value="{{ date('Y-m-d') }}">
+                        <input type="datetime-local" name="end_date" id="end_date_cerrar"
+                               class="form-control" value="{{ date('Y-m-d\TH:i') }}">
                     </div>
                     <div class="form-group mb-0">
                         <label>Costo final <small class="text-muted">(opcional)</small></label>

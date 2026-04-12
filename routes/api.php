@@ -22,7 +22,7 @@ Route::prefix('v1')->group(function () {
 
         // Reports
         Route::get('reports/vehicle-availability', [ReportController::class, 'vehicleAvailability'])
-            ->middleware('role:Admin,Operador');
+            ->middleware('role:Admin,Operador,Chofer');
 
         Route::get('reports/fleet-usage', [ReportController::class, 'fleetUsage'])
             ->middleware('role:Admin,Operador');
@@ -31,8 +31,14 @@ Route::prefix('v1')->group(function () {
             ->middleware('role:Admin,Operador');
 
         // Users
-        Route::apiResource('users', UserController::class)
-            ->middleware('role:Admin');
+        // GET index y show: Admin y Operador (el Operador necesita listar choferes)
+        Route::get('users',       [UserController::class, 'index'])->middleware('role:Admin,Operador');
+        Route::get('users/{user}',[UserController::class, 'show'])->middleware('role:Admin,Operador');
+        // Crear, actualizar y eliminar: solo Admin
+        Route::post(  'users',         [UserController::class, 'store'])  ->middleware('role:Admin');
+        Route::put(   'users/{user}',   [UserController::class, 'update']) ->middleware('role:Admin');
+        Route::patch( 'users/{user}',   [UserController::class, 'update']) ->middleware('role:Admin');
+        Route::delete('users/{user}',   [UserController::class, 'destroy'])->middleware('role:Admin');
 
         // Vehicles
         Route::get('vehicles', [VehicleController::class, 'index'])
@@ -56,13 +62,7 @@ Route::prefix('v1')->group(function () {
 
         // ── Trip Requests ─────────────────────────────────────────────────────
 
-        /*
-         * IMPORTANTE: La ruta de asignación directa debe declararse ANTES del
-         * apiResource para que Laravel no interprete 'direct-assign' como el
-         * parámetro {tripRequest} del resource route.
-         */
-
-        // Tarjeta 15 — Asignación directa (crea TripRequest en status = approved).
+        // Tarjeta 15 — Asignación directa
         Route::post(
             'trip-requests/direct-assign',
             [TripRequestController::class, 'directAssign']
@@ -108,11 +108,11 @@ Route::prefix('v1')->group(function () {
         Route::apiResource('trips', TripController::class)
             ->middleware('role:Admin,Operador');
 
-       Route::patch(
-    'trips/{trip}/register-return',
-    [TripController::class, 'registerReturn']
-)->middleware('role:Chofer,Admin,Operador')
- ->name('trips.register-return');
+        Route::patch(
+            'trips/{trip}/register-return',
+            [TripController::class, 'registerReturn']
+        )->middleware('role:Chofer,Admin,Operador')
+         ->name('trips.register-return');
 
         // ── Maintenances ──────────────────────────────────────────────────────
 

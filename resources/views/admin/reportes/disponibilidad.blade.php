@@ -132,9 +132,9 @@ $statusLabels = [
                                 </span>
                                 @if(!empty($v['departure_date']) && !empty($v['return_date']))
                                 <small class="d-block text-muted mt-1">
-                                    {{ \Carbon\Carbon::parse($v['departure_date'])->format('d/m/Y H:i') }}
+                                    {{ \Carbon\Carbon::parse($v['departure_date'])->subHours(6)->format('d/m/Y H:i') }}
                                     →
-                                    {{ \Carbon\Carbon::parse($v['return_date'])->format('d/m/Y H:i') }}
+                                    {{ \Carbon\Carbon::parse($v['return_date'])->subHours(6)->format('d/m/Y H:i') }}
                                 </small>
                                 @endif
                             @else

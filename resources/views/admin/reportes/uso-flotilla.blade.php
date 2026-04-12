@@ -1,7 +1,7 @@
 @extends('layouts.app')
 
 @section('title', 'Uso de Flotilla')
-@section('page-title', 'Reporte — Uso de Flotilla por Período')
+@section('page-title', 'Reporte - Uso de Flotilla por Periodo')
 
 @section('content')
 
@@ -12,7 +12,6 @@
     </ol>
 </nav>
 
-{{-- Filtros --}}
 <div class="card card-outline card-primary mb-4">
     <div class="card-header">
         <h3 class="card-title"><i class="fas fa-filter mr-2"></i>Filtros</h3>
@@ -48,18 +47,27 @@
     </form>
 </div>
 
-{{-- Resultados --}}
 @if($startDate && $endDate)
 
-{{-- Tarjetas resumen --}}
-@if($reporte->isNotEmpty())
+@php
+    $lista       = collect($reporte);
+    $totalViajes = 0;
+    $totalKm     = 0;
+    foreach ($lista as $item) {
+        $r = is_array($item) ? $item : (array) $item;
+        $totalViajes += (int)   ($r['total_trips']      ?? 0);
+        $totalKm     += (float) ($r['total_kilometers'] ?? 0);
+    }
+@endphp
+
+@if($lista->isNotEmpty())
 <div class="row mb-4">
     <div class="col-md-4">
         <div class="info-box bg-primary">
             <span class="info-box-icon"><i class="fas fa-car"></i></span>
             <div class="info-box-content">
-                <span class="info-box-text">Vehículos activos</span>
-                <span class="info-box-number">{{ $reporte->count() }}</span>
+                <span class="info-box-text">Vehiculos activos</span>
+                <span class="info-box-number">{{ $lista->count() }}</span>
             </div>
         </div>
     </div>
@@ -68,7 +76,7 @@
             <span class="info-box-icon"><i class="fas fa-road"></i></span>
             <div class="info-box-content">
                 <span class="info-box-text">Total viajes</span>
-                <span class="info-box-number">{{ $reporte->sum('total_viajes') }}</span>
+                <span class="info-box-number">{{ $totalViajes }}</span>
             </div>
         </div>
     </div>
@@ -76,8 +84,8 @@
         <div class="info-box bg-warning">
             <span class="info-box-icon"><i class="fas fa-tachometer-alt"></i></span>
             <div class="info-box-content">
-                <span class="info-box-text">Total kilómetros</span>
-                <span class="info-box-number">{{ number_format($reporte->sum('total_km')) }} km</span>
+                <span class="info-box-text">Total kilometros</span>
+                <span class="info-box-number">{{ number_format($totalKm) }} km</span>
             </div>
         </div>
     </div>
@@ -88,18 +96,18 @@
     <div class="card-header">
         <h3 class="card-title">
             <i class="fas fa-chart-bar mr-2"></i>
-            Uso — del {{ \Carbon\Carbon::parse($startDate)->format('d/m/Y') }}
+            Uso del {{ \Carbon\Carbon::parse($startDate)->format('d/m/Y') }}
             al {{ \Carbon\Carbon::parse($endDate)->format('d/m/Y') }}
         </h3>
         <div class="card-tools">
-            <span class="badge badge-secondary">{{ $reporte->count() }} vehículo(s)</span>
+            <span class="badge badge-secondary">{{ $lista->count() }} vehiculo(s)</span>
         </div>
     </div>
     <div class="card-body p-0">
-        @if($reporte->isEmpty())
+        @if($lista->isEmpty())
             <div class="text-center py-5 text-muted">
                 <i class="fas fa-road fa-3x mb-3 d-block"></i>
-                No se registraron viajes en ese período.
+                No se registraron viajes en ese periodo.
             </div>
         @else
         <div class="table-responsive">
@@ -107,28 +115,28 @@
                 <thead class="thead-light">
                     <tr>
                         <th>Placa</th>
-                        <th>Vehículo</th>
-                        <th>Tipo</th>
+                        <th>Vehiculo</th>
                         <th class="text-center">Total Viajes</th>
-                        <th class="text-center">Kilómetros Recorridos</th>
-                        <th>Participación</th>
+                        <th class="text-center">Kilometros Recorridos</th>
+                        <th>Participacion</th>
                     </tr>
                 </thead>
                 <tbody>
-                    @php $totalKm = $reporte->sum('total_km'); @endphp
-                    @foreach($reporte as $r)
+                    @foreach($lista as $item)
                     @php
-                        $porcentaje = $totalKm > 0 ? round(($r->total_km / $totalKm) * 100) : 0;
+                        $r          = is_array($item) ? $item : (array) $item;
+                        $kmItem     = (float) ($r['total_kilometers'] ?? 0);
+                        $viajesItem = (int)   ($r['total_trips']      ?? 0);
+                        $porcentaje = $totalKm > 0 ? round(($kmItem / $totalKm) * 100) : 0;
                     @endphp
                     <tr>
-                        <td><strong>{{ $r->plate }}</strong></td>
-                        <td>{{ $r->brand }} {{ $r->model }}</td>
-                        <td>{{ $r->vehicle_type }}</td>
+                        <td><strong>{{ $r['plate'] ?? '-' }}</strong></td>
+                        <td>{{ ($r['brand'] ?? '') }} {{ ($r['model'] ?? '') }}</td>
                         <td class="text-center">
-                            <span class="badge badge-primary badge-lg">{{ $r->total_viajes }}</span>
+                            <span class="badge badge-primary">{{ $viajesItem }}</span>
                         </td>
                         <td class="text-center">
-                            <strong>{{ number_format($r->total_km) }}</strong>
+                            <strong>{{ number_format($kmItem) }}</strong>
                             <small class="text-muted"> km</small>
                         </td>
                         <td style="min-width:150px">
@@ -143,8 +151,8 @@
                 </tbody>
                 <tfoot class="thead-light">
                     <tr>
-                        <td colspan="3"><strong>TOTAL</strong></td>
-                        <td class="text-center"><strong>{{ $reporte->sum('total_viajes') }}</strong></td>
+                        <td colspan="2"><strong>TOTAL</strong></td>
+                        <td class="text-center"><strong>{{ $totalViajes }}</strong></td>
                         <td class="text-center"><strong>{{ number_format($totalKm) }} km</strong></td>
                         <td></td>
                     </tr>

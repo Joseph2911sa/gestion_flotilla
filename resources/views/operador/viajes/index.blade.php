@@ -76,14 +76,14 @@
                         <td>
                             <small>
                                 {{ !empty($vj['start_time'])
-                                    ? \Carbon\Carbon::parse($vj['start_time'])->format('d/m/Y H:i')
+                                    ? \Carbon\Carbon::parse($vj['start_time'])->subHours(6)->format('d/m/Y H:i')
                                     : '—' }}
                             </small>
                         </td>
                         <td>
                             <small>
                                 {{ !empty($vj['end_time'])
-                                    ? \Carbon\Carbon::parse($vj['end_time'])->format('d/m/Y H:i')
+                                    ? \Carbon\Carbon::parse($vj['end_time'])->subHours(6)->format('d/m/Y H:i')
                                     : '—' }}
                             </small>
                         </td>
@@ -188,7 +188,7 @@
                                     {{ $s['vehicle']['plate'] ?? '?' }}
                                     {{ $s['vehicle']['brand'] ?? '' }}
                                     {{ $s['vehicle']['model'] ?? '' }} |
-                                    {{ !empty($s['departure_date']) ? \Carbon\Carbon::parse($s['departure_date'])->format('d/m/Y H:i') : '' }}
+                                    {{ !empty($s['departure_date']) ? \Carbon\Carbon::parse($s['departure_date'])->subHours(6)->format('d/m/Y H:i') : '' }}
                                 </option>
                             @endforeach
                         </select>

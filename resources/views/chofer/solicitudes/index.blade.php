@@ -15,6 +15,13 @@
             </div>
             <div class="card-body">
 
+                @if(session('success'))
+                    <div class="alert alert-success alert-dismissible fade show">
+                        <i class="fas fa-check-circle mr-2"></i>{{ session('success') }}
+                        <button type="button" class="close" data-dismiss="alert">&times;</button>
+                    </div>
+                @endif
+
                 @if(session('error'))
                     <div class="alert alert-danger alert-dismissible fade show">
                         <i class="fas fa-exclamation-circle mr-2"></i>{{ session('error') }}
@@ -32,7 +39,7 @@
                     </div>
                 @endif
 
-                <form action="{{ route('chofer.solicitudes.store') }}" method="POST">
+                <form action="{{ route('chofer.solicitudes.store') }}" method="POST" id="formSolicitud">
                     @csrf
 
                     {{-- Vehículo --}}
@@ -102,7 +109,8 @@
 
                     <div class="row mt-4">
                         <div class="col-md-6">
-                            <button type="submit" class="btn btn-primary btn-block">
+                            {{-- Botón con protección anti-duplicado --}}
+                            <button type="submit" class="btn btn-primary btn-block" id="btnEnviar">
                                 <i class="fas fa-paper-plane mr-2"></i>Enviar Solicitud
                             </button>
                         </div>
@@ -115,6 +123,16 @@
                 </form>
             </div>
         </div>
+
+        <div class="card card-outline card-info mt-3">
+            <div class="card-body small">
+                <i class="fas fa-info-circle text-info mr-1"></i>
+                Tu solicitud quedará en estado <span class="badge badge-warning">Pendiente</span>
+                hasta que un operador la revise. Solo puedes cancelar solicitudes
+                <span class="badge badge-warning">Pendientes</span> o
+                <span class="badge badge-success">Aprobadas</span>.
+            </div>
+        </div>
     </div>
 </div>
 
@@ -122,10 +140,36 @@
 
 @push('scripts')
 <script>
-document.getElementById('departure_date').addEventListener('change', function() {
-    const finInput = document.getElementById('return_date');
-    finInput.min = this.value;
-    if (finInput.value && finInput.value <= this.value) finInput.value = '';
+$(function () {
+    // Validar fecha fin > fecha inicio
+    $('#departure_date').on('change', function () {
+        const finInput = document.getElementById('return_date');
+        finInput.min = this.value;
+        if (finInput.value && finInput.value <= this.value) finInput.value = '';
+    });
+
+    // Anti-duplicado: deshabilitar botón al enviar
+    $('#formSolicitud').on('submit', function () {
+        const btn = $('#btnEnviar');
+
+        // Validaciones básicas antes de deshabilitar
+        const vehiculo = $('#vehicle_id').val();
+        const inicio   = $('#departure_date').val();
+        const fin      = $('#return_date').val();
+
+        if (!vehiculo || !inicio || !fin) return true; // deja que Laravel valide
+
+        if (fin <= inicio) {
+            alert('La fecha de fin debe ser posterior a la fecha de inicio.');
+            return false;
+        }
+
+        // Deshabilitar botón para evitar doble envío
+        btn.prop('disabled', true)
+           .html('<i class="fas fa-spinner fa-spin mr-2"></i>Enviando...');
+
+        return true;
+    });
 });
 </script>
 @endpush

@@ -16,13 +16,22 @@ class VehiculoController extends Controller
         $fecha_fin    = $request->query('fecha_fin');
 
         if ($fecha_inicio && $fecha_fin) {
-            // Usar reporte de disponibilidad para filtrar por rango
-            $response  = $this->apiGet('reports/vehicle-availability', [
-                'start_date' => $fecha_inicio,
-                'end_date'   => $fecha_fin,
+            // datetime-local envia "2026-04-12T15:00"
+            // El API necesita "2026-04-12 15:00:00"
+            $startFormatted = str_replace('T', ' ', $fecha_inicio) . ':00';
+            $endFormatted   = str_replace('T', ' ', $fecha_fin)   . ':00';
+
+            $response = $this->apiGet('reports/vehicle-availability', [
+                'start_date' => $startFormatted,
+                'end_date'   => $endFormatted,
             ]);
+
+           if ($response->failed()) {
+    dd($response->status(), $response->json(), $startFormatted, $endFormatted);
+}
+
             $todos     = collect($response->json('data') ?? []);
-            $vehiculos = $todos->filter(fn($v) => is_null($v['trip_request_id']))->values();
+            $vehiculos = $todos->filter(fn($v) => empty($v['trip_request_id']))->values();
 
             return view('chofer.vehiculos.index', [
                 'vehiculos'    => $vehiculos,
@@ -32,10 +41,16 @@ class VehiculoController extends Controller
             ]);
         }
 
+        // Sin filtro: mostrar todos los disponibles paginados
         $response = $this->apiGet('vehicles', [
             'status' => 'available',
             'page'   => $request->query('page', 1),
         ]);
+
+        if ($response->failed()) {
+            return redirect()->route('chofer.vehiculos')
+                ->with('error', 'Error al cargar vehiculos disponibles.');
+        }
 
         $paginado = $response->json('data');
 
@@ -45,8 +60,8 @@ class VehiculoController extends Controller
             'fecha_fin'    => null,
             'paginado'     => [
                 'current_page' => $paginado['current_page'] ?? 1,
-                'last_page'    => $paginado['last_page'] ?? 1,
-                'total'        => $paginado['total'] ?? 0,
+                'last_page'    => $paginado['last_page']    ?? 1,
+                'total'        => $paginado['total']        ?? 0,
             ],
         ]);
     }

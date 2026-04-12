@@ -57,8 +57,9 @@
         @php $v = is_array($vehiculo) ? $vehiculo : $vehiculo->toArray(); @endphp
         <div class="col-md-4 mb-4">
             <div class="card h-100 shadow-sm">
-                {{-- Imagen --}}
-                <div style="height:200px;overflow:hidden;background:#f4f6f9;">
+
+                {{-- Imagen con check en esquina superior derecha --}}
+                <div style="position:relative;height:200px;overflow:hidden;background:#f4f6f9;">
                     @if(!empty($v['image_path']))
                         <img src="{{ asset('storage/' . $v['image_path']) }}"
                              alt="{{ $v['brand'] }} {{ $v['model'] }}"
@@ -69,22 +70,25 @@
                             <i class="fas fa-car fa-4x text-muted"></i>
                         </div>
                     @endif
+                    <span style="position:absolute;top:8px;right:8px;font-size:1.4rem;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.4));"
+                          class="text-success">
+                        <i class="fas fa-check-circle"></i>
+                    </span>
                 </div>
 
                 {{-- Especificaciones --}}
                 <div class="card-body">
-                    <h5 class="card-title font-weight-bold">
+                    <h5 class="card-title font-weight-bold mb-0">
                         {{ $v['brand'] }} {{ $v['model'] }}
-                        <span class="badge badge-success float-right">Disponible</span>
-                    </h5>
-                    <p class="text-muted mb-1">
-                        <i class="fas fa-id-card mr-1"></i>
-                        <strong>Placa:</strong> {{ $v['plate'] }}
-                    </p>
-                    <p class="text-muted mb-1">
-                        <i class="fas fa-calendar mr-1"></i>
-                        <strong>Año:</strong> {{ $v['year'] }}
-                    </p>
+                        
+                        <p class="text-muted mb-1">
+                            <i class="fas fa-id-card mr-1"></i>
+                            <strong>Placa:</strong> {{ $v['plate'] }}
+                        </p>
+                        <p class="text-muted mb-1">
+                            <i class="fas fa-calendar mr-1"></i>
+                            <strong>Año:</strong> {{ $v['year'] }}
+                        </p>
                     <p class="text-muted mb-1">
                         <i class="fas fa-car-side mr-1"></i>
                         <strong>Tipo:</strong> {{ $v['vehicle_type'] }}

@@ -170,7 +170,7 @@
                         <td>
                             <small>
                                 {{ isset($usuario['created_at'])
-                                    ? \Carbon\Carbon::parse($usuario['created_at'])->format('d/m/Y H:i')
+                                    ? \Carbon\Carbon::parse($usuario['created_at'])->subHours(6)->format('d/m/Y H:i')
                                     : '—' }}
                             </small>
                         </td>
@@ -180,7 +180,7 @@
                         <td>
                             <small>
                                 {{ isset($usuario['updated_at'])
-                                    ? \Carbon\Carbon::parse($usuario['updated_at'])->format('d/m/Y H:i')
+                                    ? \Carbon\Carbon::parse($usuario['updated_at'])->subHours(6)->format('d/m/Y H:i')
                                     : '—' }}
                             </small>
                         </td>

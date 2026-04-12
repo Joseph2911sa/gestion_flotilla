@@ -14,6 +14,7 @@ class SolicitudController extends Controller
     {
         $statusFiltro = $request->query('status', 'pending');
         $params       = ['page' => $request->query('page', 1)];
+
         if ($statusFiltro && $statusFiltro !== 'all') {
             $params['status'] = $statusFiltro;
         }
@@ -26,29 +27,32 @@ class SolicitudController extends Controller
 
         $paginado = $response->json('data');
 
-        // Contadores por estado
-        $contadores = [];
+        // Contadores por estado (ignorar si fallan)
+        $contadores = ['pending' => 0, 'approved' => 0, 'rejected' => 0, 'cancelled' => 0];
         foreach (['pending', 'approved', 'rejected', 'cancelled'] as $st) {
-            $r = $this->apiGet('trip-requests', ['status' => $st, 'per_page' => 1]);
-            $contadores[$st] = $r->json('data.total') ?? 0;
+            try {
+                $r = $this->apiGet('trip-requests', ['status' => $st, 'per_page' => 1]);
+                $contadores[$st] = $r->json('data.total') ?? 0;
+            } catch (\Exception $e) {
+                $contadores[$st] = 0;
+            }
         }
 
-        // Cargar datos para modal de asignación directa
-        $rChoferes  = $this->apiGet('users', ['per_page' => 999]);
+        // Cargar choferes usando role_id=3
+        $rChoferes  = $this->apiGet('users', ['role_id' => 3, 'per_page' => 999]);
         $rVehiculos = $this->apiGet('vehicles', ['status' => 'available', 'per_page' => 999]);
         $rRutas     = $this->apiGet('routes', ['per_page' => 999]);
 
-        $todosUsuarios = collect($rChoferes->json('data.data') ?? []);
-        $choferes      = $todosUsuarios->filter(fn($u) => ($u['role']['name'] ?? '') === 'Chofer')->values();
-        $vehiculos     = collect($rVehiculos->json('data.data') ?? []);
-        $rutas         = collect($rRutas->json('data.data') ?? []);
+        $choferes  = collect($rChoferes->json('data.data') ?? []);
+        $vehiculos = collect($rVehiculos->json('data.data') ?? []);
+        $rutas     = collect($rRutas->json('data.data') ?? []);
 
         return view('operador.solicitudes.index', [
             'solicitudes'  => $paginado['data'] ?? [],
             'paginado'     => [
-                'current_page' => $paginado['current_page'],
-                'last_page'    => $paginado['last_page'],
-                'total'        => $paginado['total'],
+                'current_page' => $paginado['current_page'] ?? 1,
+                'last_page'    => $paginado['last_page']    ?? 1,
+                'total'        => $paginado['total']        ?? 0,
             ],
             'statusFiltro' => $statusFiltro,
             'contadores'   => $contadores,
@@ -91,7 +95,7 @@ class SolicitudController extends Controller
             'return_date'    => 'required|date|after:departure_date',
         ], [
             'user_id.required'        => 'Seleccione un chofer.',
-            'vehicle_id.required'     => 'Seleccione un vehículo.',
+            'vehicle_id.required'     => 'Seleccione un vehiculo.',
             'departure_date.required' => 'La fecha de salida es obligatoria.',
             'return_date.required'    => 'La fecha de retorno es obligatoria.',
             'return_date.after'       => 'El retorno debe ser posterior a la salida.',
@@ -107,23 +111,22 @@ class SolicitudController extends Controller
         ]);
 
         if ($response->failed()) {
-            return $this->handleError($response, 'Error al crear la asignación directa.');
+            return $this->handleError($response, 'Error al crear la asignacion directa.');
         }
 
         return redirect()->route('operador.solicitudes')
-            ->with('success', 'Asignación directa creada correctamente.');
+            ->with('success', 'Asignacion directa creada correctamente.');
     }
 
     public function createDirecta()
     {
-        $rChoferes  = $this->apiGet('users', ['per_page' => 999]);
+        $rChoferes  = $this->apiGet('users', ['role_id' => 3, 'per_page' => 999]);
         $rVehiculos = $this->apiGet('vehicles', ['status' => 'available', 'per_page' => 999]);
         $rRutas     = $this->apiGet('routes', ['per_page' => 999]);
 
-        $todosUsuarios = collect($rChoferes->json('data.data') ?? []);
-        $choferes      = $todosUsuarios->filter(fn($u) => ($u['role']['name'] ?? '') === 'Chofer')->values();
-        $vehiculos     = collect($rVehiculos->json('data.data') ?? []);
-        $rutas         = collect($rRutas->json('data.data') ?? []);
+        $choferes  = collect($rChoferes->json('data.data') ?? []);
+        $vehiculos = collect($rVehiculos->json('data.data') ?? []);
+        $rutas     = collect($rRutas->json('data.data') ?? []);
 
         return view('operador.solicitudes.directa', compact('choferes', 'vehiculos', 'rutas'));
     }

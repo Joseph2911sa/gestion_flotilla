@@ -272,6 +272,21 @@ class TripRequestController extends Controller
             return $validationError;
         }
 
+        // Validar solapamiento del chofer
+        $driverOverlap = TripRequest::where('user_id', $tripRequest->user_id)
+            ->where('status', TripRequest::STATUS_APPROVED)
+            ->where('id', '!=', $tripRequest->id)
+            ->where('departure_date', '<', $tripRequest->return_date)
+            ->where('return_date', '>', $tripRequest->departure_date)
+            ->exists();
+
+        if ($driverOverlap) {
+            return response()->json([
+                'success' => false,
+                'message' => 'El chofer ya tiene una asignacion aprobada que se traslapa con las fechas solicitadas.',
+            ], 422);
+        }
+
         $tripRequest->update([
             'status'      => TripRequest::STATUS_APPROVED,
             'reviewed_by' => $request->user()->id,
@@ -388,6 +403,20 @@ class TripRequestController extends Controller
 
         if ($validationError !== null) {
             return $validationError;
+        }
+
+        // Validar solapamiento del chofer
+        $driverOverlap = TripRequest::where('user_id', $request->user_id)
+            ->where('status', TripRequest::STATUS_APPROVED)
+            ->where('departure_date', '<', $request->return_date)
+            ->where('return_date', '>', $request->departure_date)
+            ->exists();
+
+        if ($driverOverlap) {
+            return response()->json([
+                'success' => false,
+                'message' => 'El chofer ya tiene una asignacion aprobada que se traslapa con las fechas solicitadas.',
+            ], 422);
         }
 
         $tripRequest = DB::transaction(function () use ($request) {
