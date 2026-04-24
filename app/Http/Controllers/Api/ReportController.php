@@ -13,20 +13,22 @@ class ReportController extends Controller
     {
         $request->validate([
             'start_date' => 'required|date',
-            'end_date' => 'required|date|after_or_equal:start_date',
+            'end_date'   => 'required|date|after_or_equal:start_date',
         ]);
 
         $startDate = $request->query('start_date');
-        $endDate = $request->query('end_date');
+        $endDate   = $request->query('end_date');
 
         $report = DB::table('vehicles')
             ->leftJoin('trip_requests', function ($join) use ($startDate, $endDate) {
                 $join->on('vehicles.id', '=', 'trip_requests.vehicle_id')
                     ->whereNull('trip_requests.deleted_at')
-                    ->where(function ($query) use ($startDate, $endDate) {
-                        $query->whereBetween('trip_requests.departure_date', [$startDate, $endDate])
-                              ->orWhereBetween('trip_requests.return_date', [$startDate, $endDate]);
-                    });
+                    // Solo solicitudes aprobadas (no pendientes, rechazadas ni canceladas)
+                    ->whereIn('trip_requests.status', ['approved', 'completed'])
+                    // Detección correcta de traslape de rangos:
+                    // Dos rangos [A,B] y [C,D] se solapan si A < D AND B > C
+                    ->where('trip_requests.departure_date', '<', $endDate)
+                    ->where('trip_requests.return_date',    '>', $startDate);
             })
             ->whereNull('vehicles.deleted_at')
             ->select(
@@ -50,7 +52,7 @@ class ReportController extends Controller
 
         return response()->json([
             'message' => 'Reporte de disponibilidad de vehículos',
-            'data' => $report
+            'data'    => $report,
         ]);
     }
 
@@ -58,11 +60,11 @@ class ReportController extends Controller
     {
         $request->validate([
             'start_date' => 'required|date',
-            'end_date' => 'required|date|after_or_equal:start_date',
+            'end_date'   => 'required|date|after_or_equal:start_date',
         ]);
 
         $startDate = $request->query('start_date');
-        $endDate = $request->query('end_date');
+        $endDate   = $request->query('end_date');
 
         $report = DB::table('trips')
             ->join('vehicles', 'trips.vehicle_id', '=', 'vehicles.id')
@@ -88,21 +90,21 @@ class ReportController extends Controller
 
         return response()->json([
             'message' => 'Reporte de uso de flotilla',
-            'data' => $report
+            'data'    => $report,
         ]);
     }
 
     public function driverHistory(Request $request): JsonResponse
     {
         $request->validate([
-            'driver_id' => 'required|integer|exists:users,id',
+            'driver_id'  => 'required|integer|exists:users,id',
             'start_date' => 'required|date',
-            'end_date' => 'required|date|after_or_equal:start_date',
+            'end_date'   => 'required|date|after_or_equal:start_date',
         ]);
 
-        $driverId = $request->query('driver_id');
+        $driverId  = $request->query('driver_id');
         $startDate = $request->query('start_date');
-        $endDate = $request->query('end_date');
+        $endDate   = $request->query('end_date');
 
         $report = DB::table('trip_requests')
             ->join('vehicles', 'trip_requests.vehicle_id', '=', 'vehicles.id')
@@ -111,7 +113,7 @@ class ReportController extends Controller
             ->where('trip_requests.user_id', $driverId)
             ->where(function ($query) use ($startDate, $endDate) {
                 $query->whereBetween('trip_requests.departure_date', [$startDate, $endDate])
-                      ->orWhereBetween('trip_requests.return_date', [$startDate, $endDate]);
+                      ->orWhereBetween('trip_requests.return_date',  [$startDate, $endDate]);
             })
             ->select(
                 'trip_requests.id',
@@ -129,7 +131,7 @@ class ReportController extends Controller
 
         return response()->json([
             'message' => 'Reporte de historial del chofer',
-            'data' => $report
+            'data'    => $report,
         ]);
     }
 }
